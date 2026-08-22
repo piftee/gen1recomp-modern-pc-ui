@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.1] - 2026-08-22
+
+### Changed
+
+- Only the highlighted party or box slot now animates. All unselected icons
+  and the duplicate detail portrait remain on their resting frame.
+- HGSS animation follows the PC cursor across party and box slots while
+  preserving the fitted sprite alignment and transparent backgrounds.
+
 ## [0.2.0] - 2026-08-22
 
 ### Changed
