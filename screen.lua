@@ -1035,7 +1035,7 @@ return function(mod, genderExports, compatibility)
       if region == "party" and not layout.compact then
         drawMonIcon(screen, mon, rect.x + 2,
           rect.y + math.max(0, math.floor((rect.h - 16) / 2)),
-          iconAnimationEnabled(screen), 1,
+          iconAnimationEnabled(screen) and chosen, 1,
           trueColorRegions, face)
         local ink = chosen and WHITE or BLACK
         drawText(monName(screen, mon), rect.x + 20, rect.y + 2,
@@ -1049,7 +1049,8 @@ return function(mod, genderExports, compatibility)
         drawMonIcon(screen, mon,
           rect.x + math.floor((rect.w - 16) / 2),
           rect.y + math.floor((rect.h - 16) / 2),
-          iconAnimationEnabled(screen), 1, trueColorRegions, face)
+          iconAnimationEnabled(screen) and chosen, 1,
+          trueColorRegions, face)
       end
     end
 
@@ -1083,7 +1084,7 @@ return function(mod, genderExports, compatibility)
 
     if layout.compact then
       drawMonIcon(screen, mon, layout.detail.x + 6, layout.detail.y + 6,
-        iconAnimationEnabled(screen), 1, trueColorRegions, detailFace)
+        false, 1, trueColorRegions, detailFace)
       drawText(name, layout.detail.x + 27, layout.detail.y + 4,
         math.max(32, layout.detail.w - 92), WHITE)
       local genderWidth = drawGenderGlyph(mon, layout.detail.x + 27,
@@ -1103,7 +1104,7 @@ return function(mod, genderExports, compatibility)
     local iconSize = 16 * iconScale
     drawMonIcon(screen, mon,
       layout.detail.x + math.floor((layout.detail.w - iconSize) / 2),
-      layout.detail.y + 8, iconAnimationEnabled(screen), iconScale,
+      layout.detail.y + 8, false, iconScale,
       trueColorRegions, detailFace)
     local infoY = layout.detail.y + 14 + iconSize
     drawCentered(name, layout.detail.x + layout.detail.w / 2,

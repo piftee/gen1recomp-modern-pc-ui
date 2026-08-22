@@ -613,6 +613,10 @@ local animatedW = animated.quad.w * animated.sx
 local animatedH = animated.quad.h * animated.sy
 T.check(animated.quad.y >= 32 and animatedW <= 18 and animatedH <= 18,
   "the selected icon advances to the second source frame")
+for i = beforeAnimated + 2, beforeAnimated + 4 do
+  T.check(fittedDraws[i] and fittedDraws[i].quad.y < 32,
+    "unselected PC and duplicate detail icons stay on the resting frame")
+end
 T.check(math.abs((animated.x + animatedW / 2) - (iconX + 8)) <= 0.6
     and math.abs((animated.y + animatedH / 2) - (iconY + 8)) <= 0.6,
   "the shared animation envelope remains centred")
@@ -625,9 +629,10 @@ T.check(animated.quad.x == firstDraw.quad.x
   "PC frames retain HGSS's authored internal bob instead of re-centring it")
 
 -- Box records loaded from a save may not contain calculated battle stats.
--- Animation must remain enabled for those records and use its fallback pace.
+-- The selected record must still animate using its fallback pace.
 hgssSave.boxes[1][1].stats = nil
 hgssSave.boxes[1][1].hp = nil
+hgssScreen.region, hgssScreen.boxIndex = "box", 1
 local beforeStatless = #fittedDraws
 hgssScreen.blink = 32
 local statlessOK, statlessErr = pcall(hgssScreen.draw, hgssScreen)
@@ -635,10 +640,15 @@ T.check(statlessOK,
   "a statless boxed HGSS icon animates: " .. tostring(statlessErr))
 local statlessBoxDraw = fittedDraws[beforeStatless + 3]
 T.check(statlessBoxDraw and statlessBoxDraw.quad.y >= 32,
-  "stored Pokémon without battle stats still use frame two")
+  "a highlighted stored Pokémon without battle stats still uses frame two")
+for _, offset in ipairs({ 1, 2, 4 }) do
+  local draw = fittedDraws[beforeStatless + offset]
+  T.check(draw and draw.quad.y < 32,
+    "only the highlighted statless box icon animates")
+end
 
 -- Compatibility wrappers can redraw the PC without advancing BoxMenu.update.
--- The wall clock must keep every visible icon moving in that situation.
+-- The wall clock must keep the highlighted icon moving in that situation.
 local oldGetTime = love.timer.getTime
 love.timer.getTime = function() return 0.6 end
 hgssScreen.blink = 0
@@ -647,9 +657,11 @@ local clockOK, clockErr = pcall(hgssScreen.draw, hgssScreen)
 love.timer.getTime = oldGetTime
 T.check(clockOK,
   "wall-clock HGSS animation draws: " .. tostring(clockErr))
-for i = beforeClock + 1, beforeClock + 4 do
-  T.check(fittedDraws[i] and fittedDraws[i].quad.y >= 32,
-    "the PC wall clock advances fitted HGSS icon " .. i)
+for offset = 1, 4 do
+  local draw = fittedDraws[beforeClock + offset]
+  T.check(draw and ((offset == 3 and draw.quad.y >= 32)
+      or (offset ~= 3 and draw.quad.y < 32)),
+    "the PC wall clock advances only the highlighted fitted HGSS icon")
 end
 
 -- If a host cannot expose ImageData, reduce the complete HGSS source to the
