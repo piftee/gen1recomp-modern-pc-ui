@@ -1,0 +1,37 @@
+return {
+  summary = "Move Pokémon directly between a visible party and PC box in one colourful pixel workspace.",
+  author = "ishhodaszi",
+  tags = { "ui", "quality-of-life", "storage" },
+  differences = {
+    changed = {
+      "Someone's PC opens directly into a combined party-and-box workspace",
+      "Withdraw and Deposit lists are replaced by direct pick-up and drop",
+      "Box changes happen in-place without leaving the storage screen",
+    },
+    added = {
+      "Party and current box are visible together",
+      "A moves, places, and swaps Pokémon",
+      "SELECT advances to the next box while carrying a Pokémon",
+      "START opens Summary, quick-transfer, Release, and box navigation actions",
+      "Responsive widescreen layout with a selected-Pokémon detail panel",
+      "Colour-coded pixel panels and Pokémon palettes",
+      "Empty-slot, full-party, full-box, and last-party safeguards",
+      "Full-colour Unique Menu Icons in party, box, and detail views",
+      "Cropped and centred HGSS Visual Overhaul icons without grey backplates",
+      "Gender Mod markers and a Gen1 Modern UI source-screen bridge",
+      "Callback-backed NICKNAME and FOLLOW actions from companion mods",
+    },
+    known = {
+      "Uses the engine_internals permission to preserve native saves, summaries, cries, and Pikachu happiness",
+      "Gen 1 stores each box as a compact list, so empty positions after the last occupied slot are visual placement targets rather than persistent holes",
+      "SELECT cycles boxes forward; previous-box navigation is available from START",
+      "Uses the same optional compatibility order as Modern Party UI",
+      "Summary-only DV, ribbon, shiny, split-stat, animated-art, and party-scroll integrations remain owned by the live Summary screen",
+    },
+  },
+  credits = {
+    { who = "Gen1Recomp", for_ = "native storage, rendering, and mod platform" },
+    { who = "Game Freak", for_ = "party-and-box storage interaction inspiration" },
+  },
+  compat = { engine = ">=0.0.0-dev <1.0.0", modApi = 2 },
+}

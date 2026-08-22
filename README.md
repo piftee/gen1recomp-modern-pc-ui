@@ -1,0 +1,101 @@
+# Modern PC UI
+
+Modern PC UI turns Someone's PC into one party-and-box workspace. It keeps
+Pokémon Red's pixel font, menu icons, palettes, cries, box capacity, and save
+format while adopting the direct manipulation used by newer Pokémon games.
+
+## What changes
+
+- the party and active PC box stay visible together
+- A picks up, places, reorders, or swaps a Pokémon
+- SELECT opens the next box without putting a carried Pokémon down
+- START provides Summary, one-step transfer, Release, and previous/next box
+- selected Pokémon show their name, level, type, HP, and current location
+- empty party and box positions remain visible
+- widescreen displays add a full detail rail and named party cards
+- compact 160×144 displays retain the same party-and-box workflow
+- primary-type colours match Modern Party UI's card palette
+
+The combined layout follows the strongest common pattern in Pokémon Sword and
+Shield, Scarlet and Violet, and Legends: Arceus: party on the left, active box
+as a central grid, selected-Pokémon details alongside it, and in-place box
+switching. The implementation stays intentionally Gen 1: all graphics come
+from the player's own game data and the interface is built from crisp pixels
+and four-shade palette ramps.
+
+Reference material:
+
+- [Sword and Shield's official Pokémon Boxes overview](https://swordshield.pokemon.com/en-gb/gameplay/features-adventure/)
+- [Scarlet and Violet party-and-box workflow](https://dotesports.com/pokemon/news/how-to-access-your-pc-boxes-in-pokemon-scarlet-and-violet)
+- [Legends: Arceus Pastures controls](https://game8.co/games/Pokemon-Legends-Arceus/archives/353418)
+
+## Controls
+
+| Action | Control |
+| --- | --- |
+| Move cursor | D-pad / arrow keys |
+| Pick up or place Pokémon | A |
+| Cancel a carried Pokémon / close PC | B |
+| Open next box | SELECT |
+| Summary, quick transfer, Release, previous/next box | START |
+
+A carried Pokémon stays attached to the cursor when SELECT opens another box,
+so moving between distant boxes does not require repeated menu changes. START's
+**SEND TO BOX** and **ADD TO PARTY** actions provide an even faster one-step
+transfer when exact placement does not matter.
+
+The usual safety rules remain: the last party Pokémon cannot be deposited or
+released, a seventh party member cannot be withdrawn, and a 21st Pokémon cannot
+be added to a box. Swapping an occupied party slot with an occupied box slot is
+still allowed when both sides are full because neither collection grows.
+
+## Compatibility
+
+Modern PC UI uses Gen1Recomp's shared Pokémon icon renderer, so species icons,
+runtime icon hooks, and compatible icon replacement mods continue to work.
+Authored full-colour replacements—including **Unique Menu Icons** and icon
+wrappers used by **Wilds of Kanto**—are protected from the PC's type palettes in
+party slots, box slots, and the enlarged detail portrait. Protection is clipped
+around the live action popup so covered icons cannot repaint the popup.
+
+**HGSS Visual Overhaul** is handled separately because its party artwork uses
+padded 32×32 frames rather than Gen 1's 16×16 icon contract. Modern PC UI reads
+both frames' visible pixels, fits their shared envelope inside the slot, and
+protects only the opaque artwork. Using one envelope preserves HGSS's authored
+frame movement while keeping icons inside their cells and preventing transparent
+padding from returning as grey rectangles after the palette pass.
+
+The PC mirrors Modern Party UI's established companion list:
+
+- **Gender Mod 0.3.5** supplies its public marker, colour, and name handling.
+- **Gen1 Modern UI 0.9.2** receives a source-screen contract that keeps this
+  direct-manipulation renderer visible.
+- **Anytime Rename 1.2.1** and **Wilds of Kanto** can add callback-backed
+  NICKNAME and FOLLOW utilities to a party Pokémon's START actions.
+- **DV Tracker**, **Kanto Ribbons**, **DramaticShape**, **Crystal 251**,
+  **Crystal Animated Sprites with Shiny Visuals**, **Pokémon Gold & Silver
+  Sprites**, **HGSS Visual Overhaul**, and **QoL Toggles** initialize before the
+  PC. Selecting SUMMARY
+  therefore opens their live compatible Summary controller and the responsive
+  presentation supplied by Modern Party UI when it is installed.
+
+A boxed Pokémon receives its derived stat block when it enters the party or
+opens Summary, matching the native engine. Pokémon Yellow's deposited-Pikachu
+happiness change is retained. FOLLOW and other party-state actions are offered
+only for Pokémon currently in the party, never for boxed Pokémon.
+
+Modern Bag UI and Modern Party UI are optional companions. Together the three
+mods use the same diagonal pixel backdrop, chamfered focus cards, responsive
+width, and type-colour language.
+
+## Development
+
+From the Gen1Recomp repository root:
+
+```sh
+python3 tools/modkit.py validate mods/modern_pc_ui
+luajit mods/modern_pc_ui/tests/modern_pc_ui_test.lua
+```
+
+This package contains no ROM-derived assets. Pokémon names and imagery are
+trademarks of their respective owners; this is an unofficial fan-made mod.
