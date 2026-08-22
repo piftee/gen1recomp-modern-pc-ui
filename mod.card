@@ -11,8 +11,9 @@ return {
     added = {
       "Party and current box are visible together",
       "A moves, places, and swaps Pokémon",
-      "SELECT advances to the next box while carrying a Pokémon",
-      "START opens Summary, quick-transfer, Release, and box navigation actions",
+      "SELECT focuses a visible box header; LEFT and RIGHT browse both ways",
+      "Carried Pokémon stay attached while moving between boxes",
+      "START opens Summary, quick-transfer, Release, and companion actions",
       "Responsive widescreen layout with a selected-Pokémon detail panel",
       "Colour-coded pixel panels and Pokémon palettes",
       "Empty-slot, full-party, full-box, and last-party safeguards",
@@ -24,7 +25,7 @@ return {
     known = {
       "Uses the engine_internals permission to preserve native saves, summaries, cries, and Pikachu happiness",
       "Gen 1 stores each box as a compact list, so empty positions after the last occupied slot are visual placement targets rather than persistent holes",
-      "SELECT cycles boxes forward; previous-box navigation is available from START",
+      "The box header is a dedicated navigation mode; START remains the Pokémon action menu",
       "Uses the same optional compatibility order as Modern Party UI",
       "Summary-only DV, ribbon, shiny, split-stat, animated-art, and party-scroll integrations remain owned by the live Summary screen",
     },

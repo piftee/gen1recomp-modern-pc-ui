@@ -103,6 +103,12 @@ T.check(screen.holdsUIAnchors == true,
   "native Summary and confirmation overlays stay attached to the PC surface")
 T.eq(screen.region, "box", "the cursor starts in the active box")
 
+local function press(key)
+  input.pressed[key] = true
+  screen:update(0)
+  input.pressed[key] = nil
+end
+
 -- Direct box -> party placement, including the native box-mon stat rebuild.
 screen.boxIndex = 1
 T.check(screen:modernPCPickOrDrop(), "A picks up a boxed Pokémon")
@@ -115,13 +121,30 @@ T.eq(save.party[3], boxedC, "the chosen party slot receives the boxed Pokémon")
 T.check(type(boxedC.stats) == "table" and boxedC.stats.hp ~= nil,
   "an imported boxed Pokémon gets party stats before it is displayed there")
 
--- A carried Pokémon can cross boxes without returning to a menu.
+-- A carried Pokémon can cross boxes in either direction through the visible
+-- header selector, then return to the grid without losing the carry.
 screen.region, screen.boxIndex = "box", 1
 local crossBoxMon = save.boxes[1][1]
 T.check(screen:modernPCPickOrDrop(), "a second boxed Pokémon can be carried")
-screen:modernPCSwitchBox(1)
-T.eq(save.currentBox, 2, "SELECT-style navigation opens the next box")
-T.eq(game.writes, 1, "changing boxes retains the native save checkpoint")
+press("select")
+T.check(screen.boxSwitching,
+  "SELECT focuses the box header while a Pokémon is carried")
+T.eq(screen.held.mon, crossBoxMon,
+  "entering the box selector preserves the carried Pokémon")
+press("left")
+T.eq(save.currentBox, Boxes.COUNT,
+  "LEFT wraps backward from the first box to the last box")
+press("right")
+T.eq(save.currentBox, 1,
+  "RIGHT returns forward from the last box to the first box")
+press("right")
+T.eq(save.currentBox, 2, "RIGHT opens the next box")
+T.eq(game.writes, 3, "each box change retains the native save checkpoint")
+press("down")
+T.check(not screen.boxSwitching and screen.region == "box",
+  "DOWN returns from the header to the box grid")
+T.eq(screen.held.mon, crossBoxMon,
+  "leaving the box selector keeps the cross-box move active")
 screen.boxIndex = 2
 T.check(screen:modernPCPickOrDrop(), "the carried Pokémon drops in another box")
 T.eq(#save.boxes[1], 0, "the old box loses the cross-box Pokémon")
@@ -171,12 +194,6 @@ T.check(not screen:modernPCPickOrDrop(),
 T.eq(save.party[1], only, "the rejected move leaves the party unchanged")
 T.eq(screen.held.mon, only, "the rejected move keeps the Pokémon carried")
 
-local function press(key)
-  input.pressed[key] = true
-  screen:update(0)
-  input.pressed[key] = nil
-end
-
 press("b")
 T.eq(screen.held, nil, "B cancels a carried Pokémon without mutating storage")
 
@@ -205,25 +222,57 @@ screen.region, screen.boxIndex = "box", 1
 T.check(not screen:modernPCQuickTransfer(),
   "quick withdrawal refuses a seventh party member")
 
--- START exposes retained management actions; empty slots still provide box
--- navigation rather than a dead menu.
+-- START is reserved for actions on the selected Pokémon. Box navigation lives
+-- in the visible header selector rather than being duplicated in this menu.
 save.party = { mon("FIXMON_A", 10), mon("FIXMON_B", 10) }
 screen.region, screen.partyIndex = "party", 1
 press("start")
 local labels = {}
 for _, entry in ipairs(screen.actions or {}) do labels[#labels + 1] = entry.label end
 T.eq(table.concat(labels, "|"),
-  "SUMMARY|SEND TO BOX|RELEASE|PREV BOX|NEXT BOX|CANCEL",
-  "START keeps Summary, quick transfer, Release, and box navigation together")
+  "SUMMARY|SEND TO BOX|RELEASE|CANCEL",
+  "START keeps only actions for the selected Pokémon")
 press("b")
 T.eq(screen.actions, nil, "B closes the action card")
 
 screen.region, screen.boxIndex = "box", 20
 press("start")
-T.eq(table.concat({ screen.actions[1].label, screen.actions[2].label,
-  screen.actions[3].label }, "|"), "PREV BOX|NEXT BOX|CANCEL",
-  "an empty slot action card still supports box navigation")
+T.eq(screen.actions, nil,
+  "START does not open an action card for an empty slot")
+T.eq(screen.status, "That slot is empty.",
+  "an empty slot explains why no Pokémon actions opened")
+
+-- Release copy must fit the native two-line dialogue area so the subject of
+-- the YES/NO question never scrolls away before the choice appears.
+screen.region, screen.boxIndex = "box", 1
+press("start")
+screen.actionIndex = 3
+press("a")
+local releasePrompt = stack:top()
+T.check(releasePrompt ~= screen and releasePrompt.pages ~= nil,
+  "RELEASE opens the native confirmation prompt")
+local firstReleasePage = releasePrompt.pages and releasePrompt.pages[1] or {}
+T.eq(#firstReleasePage, 2,
+  "the release warning fits without scrolling its first line away")
+T.check(tostring(firstReleasePage[1] or ""):find("Release", 1, true) ~= nil,
+  "the visible release question keeps the Pokémon action in context")
+stack:pop()
+
+-- UP from the top box row is a second discoverable way into the selector;
+-- B leaves that mode without closing the PC or changing the cursor region.
+screen.region, screen.boxIndex = "box", 1
+press("up")
+T.check(screen.boxSwitching, "UP from the first box row focuses the header")
 press("b")
+T.check(not screen.boxSwitching and stack:top() == screen,
+  "B leaves the box selector without closing the PC")
+
+screen.region, screen.partyIndex = "party", 1
+press("select")
+press("right")
+press("a")
+T.check(not screen.boxSwitching and screen.region == "party",
+  "browsing boxes without a carry returns focus to the original party panel")
 
 -- Responsive and compact layouts both keep every panel on one native-pixel
 -- surface and draw without a ROM-backed icon atlas in the SDK fixture.

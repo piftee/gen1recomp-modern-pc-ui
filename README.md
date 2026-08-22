@@ -8,8 +8,9 @@ format while adopting the direct manipulation used by newer Pokémon games.
 
 - the party and active PC box stay visible together
 - A picks up, places, reorders, or swaps a Pokémon
-- SELECT opens the next box without putting a carried Pokémon down
-- START provides Summary, one-step transfer, Release, and previous/next box
+- SELECT focuses the box header; LEFT/RIGHT browse boxes in either direction
+  without putting a carried Pokémon down
+- START provides Summary, one-step transfer, Release, and companion actions
 - selected Pokémon show their name, level, type, HP, and current location
 - empty party and box positions remain visible
 - widescreen displays add a full detail rail and named party cards
@@ -36,13 +37,16 @@ Reference material:
 | Move cursor | D-pad / arrow keys |
 | Pick up or place Pokémon | A |
 | Cancel a carried Pokémon / close PC | B |
-| Open next box | SELECT |
-| Summary, quick transfer, Release, previous/next box | START |
+| Focus box selector | SELECT, or Up from the box's top row |
+| Previous/next box | Left/Right while the box header is focused |
+| Return to the box grid | A, B, Down, or SELECT |
+| Summary, quick transfer, Release, companion actions | START |
 
-A carried Pokémon stays attached to the cursor when SELECT opens another box,
-so moving between distant boxes does not require repeated menu changes. START's
-**SEND TO BOX** and **ADD TO PARTY** actions provide an even faster one-step
-transfer when exact placement does not matter.
+A carried Pokémon stays attached to the cursor while the highlighted box header
+moves backward or forward. This gives browsing and cross-box moves one visible,
+two-way control path rather than splitting NEXT and PREVIOUS across SELECT and
+START. START's **SEND TO BOX** and **ADD TO PARTY** actions provide an even
+faster one-step transfer when exact placement does not matter.
 
 The usual safety rules remain: the last party Pokémon cannot be deposited or
 released, a seventh party member cannot be withdrawn, and a 21st Pokémon cannot

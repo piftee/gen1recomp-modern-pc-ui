@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.0] - 2026-08-22
+
+### Changed
+
+- SELECT now focuses a visible box selector instead of silently advancing one
+  box. LEFT and RIGHT browse in both directions, including while carrying a
+  Pokémon; A, B, DOWN, or SELECT returns to the grid.
+- Pressing UP from the top row of the box grid also enters the selector.
+- START is now dedicated to actions for the selected Pokémon. Box navigation
+  is no longer duplicated at the bottom of the action menu.
+- Compact and wide footer hints now describe the current control mode.
+
+### Fixed
+
+- Release confirmation now keeps the Pokémon's name and consequence visible
+  together in the native two-line dialogue area.
+- START on an empty slot reports that the slot is empty instead of opening a
+  menu containing only navigation and Cancel.
+
 ## [0.1.3] - 2026-08-22
 
 - HGSS icons in party, box, and detail cells now animate whenever Modern

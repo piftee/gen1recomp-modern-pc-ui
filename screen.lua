@@ -18,6 +18,7 @@ return function(mod, genderExports, compatibility)
   local Stats = require("src.pokemon.Stats")
   local Strings = require("src.core.Strings")
   local TextBox = require("src.render.TextBox")
+  local Theme = require("src.ui.Theme")
 
   local SCREEN_H = 144
   local HEADER_H = 16
@@ -301,6 +302,24 @@ return function(mod, genderExports, compatibility)
     end
   end
 
+  local function beginBoxSwitcher(screen)
+    if screen.boxSwitching then return end
+    screen.boxSwitchReturnRegion = screen.held and "box" or screen.region
+    screen.region = "box"
+    screen.boxSwitching = true
+    screen.status = nil
+    play(screen, "Press_AB")
+  end
+
+  local function endBoxSwitcher(screen)
+    if not screen.boxSwitching then return end
+    screen.boxSwitching = false
+    screen.region = screen.boxSwitchReturnRegion or "box"
+    screen.boxSwitchReturnRegion = nil
+    screen.status = nil
+    play(screen, "Press_AB")
+  end
+
   local function nearestIndex(layout, region, sourceY, enteringFromLeft)
     local panel = layout[region]
     local capacity = region == "party" and Party.MAX or Boxes.CAPACITY
@@ -343,8 +362,12 @@ return function(mod, genderExports, compatibility)
         screen.boxIndex = nearestIndex(layout, "box",
           rect.y + rect.h / 2, true)
       end
-    elseif direction == "up" and row > 0 then
-      setCurrentIndex(screen, index - panel.cols)
+    elseif direction == "up" then
+      if row > 0 then
+        setCurrentIndex(screen, index - panel.cols)
+      elseif screen.region == "box" then
+        beginBoxSwitcher(screen)
+      end
     elseif direction == "down" and row < panel.rows - 1 then
       setCurrentIndex(screen, index + panel.cols)
     end
@@ -492,7 +515,7 @@ return function(mod, genderExports, compatibility)
 
     local name = monName(screen, mon)
     screen.game.stack:push(TextBox.new(screen.game,
-      Strings("Release %s?\nIt will be gone\nforever.", name), nil, {
+      Strings("Release %s?\nGone forever!", name), nil, {
         defaultNo = true, noSound = true,
         choice = function(yes)
           if not yes then
@@ -544,8 +567,6 @@ return function(mod, genderExports, compatibility)
         end
       end
     end
-    items[#items + 1] = { label = Strings("PREV BOX"), action = "prev" }
-    items[#items + 1] = { label = Strings("NEXT BOX"), action = "next" }
     items[#items + 1] = { label = Strings("CANCEL"), action = "cancel" }
     return items
   end
@@ -567,10 +588,20 @@ return function(mod, genderExports, compatibility)
       quickTransfer(screen)
     elseif action == "release" then
       requestRelease(screen)
-    elseif action == "prev" then
+    end
+  end
+
+  local function updateBoxSwitcher(screen)
+    local input = screen.game.input
+    if input:wasPressed("left") then
       switchBox(screen, -1)
-    elseif action == "next" then
+      screen.status = nil
+    elseif input:wasPressed("right") then
       switchBox(screen, 1)
+      screen.status = nil
+    elseif input:wasPressed("a") or input:wasPressed("b")
+        or input:wasPressed("down") or input:wasPressed("select") then
+      endBoxSwitcher(screen)
     end
   end
 
@@ -599,6 +630,10 @@ return function(mod, genderExports, compatibility)
       updateActions(self)
       return
     end
+    if self.boxSwitching then
+      updateBoxSwitcher(self)
+      return
+    end
 
     for _, direction in ipairs({ "left", "right", "up", "down" }) do
       if input:wasPressed(direction) then
@@ -619,12 +654,17 @@ return function(mod, genderExports, compatibility)
       end
       play(self, "Press_AB")
     elseif input:wasPressed("select") then
-      switchBox(self, 1)
+      beginBoxSwitcher(self)
     elseif input:wasPressed("start") and not self.held then
       self.status = nil
-      self.actions = actionItems(self)
-      self.actionIndex = 1
       play(self, "Press_AB")
+      local items = actionItems(self)
+      if #items == 1 then
+        self.status = Strings("That slot is empty.")
+      else
+        self.actions = items
+        self.actionIndex = 1
+      end
     end
   end
 
@@ -645,18 +685,45 @@ return function(mod, genderExports, compatibility)
     love.graphics.rectangle("fill", 0, HEADER_H - 2, layout.width, 2)
 
     local box = Boxes.active(screen.game.save)
+    local label = layout.compact
+      and Strings("BOX%02d", screen.game.save.currentBox)
+      or Strings("BOX%02d %02d/%02d",
+        screen.game.save.currentBox, #box, Boxes.CAPACITY)
+    local selectorW = math.min(layout.box.w - 2, Font.width(label) + 16)
+    local selectorX = layout.compact and layout.box.x + 1
+      or math.floor(layout.box.x + (layout.box.w - selectorW) / 2)
+    local selectorY = 1
+    if screen.boxSwitching then
+      gray(BLACK)
+      chamfer("fill", selectorX, selectorY, selectorW, 12, 2)
+    end
+
+    local function drawArrow(x, left)
+      love.graphics.push("all")
+      local shader = shaderForInk()
+      if shader then love.graphics.setShader(shader) end
+      gray(WHITE)
+      if left then
+        love.graphics.translate(x + 8, 4)
+        love.graphics.scale(-1, 1)
+        Font.drawCode(Theme.cursor, 0, 0)
+      else
+        Font.drawCode(Theme.cursor, x, 4)
+      end
+      love.graphics.pop()
+    end
+    drawArrow(selectorX, true)
+    drawArrow(selectorX + selectorW - 8, false)
+    drawCentered(label, selectorX + selectorW / 2, 4,
+      selectorW - 16, WHITE)
+
     if layout.compact then
       drawText(Strings("PARTY"), 4, 4, 40, WHITE)
-      drawText(Strings("BOX%d", screen.game.save.currentBox),
-        layout.box.x + 4, 4, 40, WHITE)
       drawRight(("%02d/%02d"):format(#box, Boxes.CAPACITY),
         layout.width - 4, 4, 48, WHITE)
     else
       drawCentered(Strings("PARTY"), layout.party.x + layout.party.w / 2,
         4, layout.party.w - 8, WHITE)
-      drawCentered(Strings("BOX%d %02d/%02d",
-          screen.game.save.currentBox, #box, Boxes.CAPACITY),
-        layout.box.x + layout.box.w / 2, 4, layout.box.w - 8, WHITE)
       drawCentered(Strings("DETAILS"),
         layout.detail.x + layout.detail.w / 2, 4,
         layout.detail.w - 8, WHITE)
@@ -1075,11 +1142,15 @@ return function(mod, genderExports, compatibility)
     if not message then
       if screen.held then
         message = layout.compact and Strings("A PLACE  B CANCEL")
-          or Strings("A PLACE B CANCEL SEL BOX")
+          or Strings("A PLACE B CANCEL SEL BOXES")
       else
-        message = layout.compact and Strings("A MOVE START MENU")
-          or Strings("A MOVE START MENU SEL BOX")
+        message = layout.compact and Strings("A MOVE SEL BOX")
+          or Strings("A MOVE START MENU SEL BOXES")
       end
+    end
+    if screen.boxSwitching then
+      message = layout.compact and Strings("ARROWS BOX A DONE")
+        or Strings("LEFT RIGHT BOX  A DONE")
     end
     drawCentered(message, layout.width / 2, FOOTER_Y,
       layout.width - 8, WHITE)
@@ -1270,6 +1341,10 @@ return function(mod, genderExports, compatibility)
     return quickTransfer(self)
   end
 
+  function PC:modernPCRequestRelease()
+    return requestRelease(self)
+  end
+
   function PC:modernPCLayoutInfo()
     return layoutFor(self)
   end
@@ -1286,6 +1361,8 @@ return function(mod, genderExports, compatibility)
         boxIndex = 1,
         blink = 0,
         held = nil,
+        boxSwitching = false,
+        boxSwitchReturnRegion = nil,
         actions = nil,
         actionIndex = 1,
         status = nil,

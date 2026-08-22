@@ -66,17 +66,31 @@ return function(game)
   U.shot(game, DIR .. "/modern_pc_actions.png")
   screen.actions = nil
 
-  -- Carry a Pokémon while switching boxes, the key multi-box workflow.
+  -- Carry a Pokémon while using the visible two-way box selector.
   screen.region, screen.boxIndex = "box", 1
   screen:modernPCPickOrDrop()
   local writeSave = game.writeSave
   game.writeSave = function() end -- isolated preview has no overworld map
-  screen:modernPCSwitchBox(1)
+  U.tap(game, "select")
+  U.wait(4)
+  U.shot(game, DIR .. "/modern_pc_box_selector.png")
+  U.tap(game, "right")
+  U.tap(game, "down")
   game.writeSave = writeSave
   screen.boxIndex = 4
   U.wait(8)
   U.shot(game, DIR .. "/modern_pc_cross_box.png")
   screen:modernPCPickOrDrop()
+
+  -- Release keeps the question and consequence visible together above the
+  -- wide PC instead of scrolling the Pokémon's name out of the prompt.
+  screen.region, screen.boxIndex = "box", 1
+  U.tap(game, "start")
+  screen.actionIndex = 3
+  U.tap(game, "a")
+  U.wait(120)
+  U.shot(game, DIR .. "/modern_pc_release_confirmation.png")
+  while game.stack:top() ~= screen do game.stack:pop() end
 
   -- Classic 160x144 keeps the same functionality with compact icon grids.
   love.window.setMode(640, 576, {
@@ -84,4 +98,7 @@ return function(game)
   })
   U.wait(12)
   U.shot(game, DIR .. "/modern_pc_compact.png")
+  U.tap(game, "select")
+  U.wait(4)
+  U.shot(game, DIR .. "/modern_pc_compact_box_selector.png")
 end
