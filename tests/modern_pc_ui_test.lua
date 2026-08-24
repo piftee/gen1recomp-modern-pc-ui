@@ -8,6 +8,7 @@ local Font = require("src.render.Font")
 local PaletteFX = require("src.render.PaletteFX")
 local PartyMenu = require("src.ui.PartyMenu")
 local Pokemon = require("src.pokemon.Pokemon")
+local Sprites = require("src.pokemon.Sprites")
 
 local data = T.fixtures.fresh()
 data.icons = {
@@ -46,7 +47,7 @@ data.palettes = {
       { 185, 145, 25 }, { 0, 0, 0 },
     },
   },
-  pokemon = {},
+  pokemon = { FIXMON_A = "REDMON" },
 }
 Font.load(data)
 local previousMode = PaletteFX.mode
@@ -285,16 +286,79 @@ T.eq(wideH, 144, "the responsive PC keeps the Game Boy screen height")
 local wideLayout = screen:modernPCLayoutInfo()
 T.check(not wideLayout.compact and wideLayout.detail.x > wideLayout.box.x,
   "widescreen adds a dedicated detail rail to the right of the box")
+local warmPixels = {}
+for y = 0, 2 do
+  warmPixels[y] = {}
+  for x = 0, 2 do warmPixels[y][x] = { 0, 0, 0, 0 } end
+end
+warmPixels[1][1] = { 0.5, 0.5, 0.5, 1 }
+local warmData = {}
+function warmData:getDimensions() return 3, 3 end
+function warmData:getPixel(x, y) return unpack(warmPixels[y][x]) end
+function warmData:mapPixel(fn)
+  for y = 0, 2 do
+    for x = 0, 2 do
+      warmPixels[y][x] = { fn(x, y, self:getPixel(x, y)) }
+    end
+  end
+end
+local realProfileImageData = Assets.imageData
+Assets.imageData = function() return warmData end
 local wideOK, wideErr = pcall(screen.draw, screen)
+Assets.imageData = realProfileImageData
 T.check(wideOK, "the widescreen PC draws headlessly: " .. tostring(wideErr))
+local vividRed = PaletteFX.gbcPack().palettes.REDMON[3]
+T.eq(math.floor(warmPixels[1][1][1] * 255 + 0.5), vividRed[1],
+  "large SGB PC portraits use the higher-contrast warm midpoint")
+T.eq(math.floor(warmPixels[1][1][2] * 255 + 0.5), vividRed[2],
+  "the SGB PC midpoint keeps the Advanced green channel")
+T.eq(math.floor(warmPixels[1][1][3] * 255 + 0.5), vividRed[3],
+  "the SGB PC midpoint keeps the Advanced blue channel")
 
 -- Authored species icons and wrapper-supplied icon claims remain full colour
--- in party slots, box slots, and the enlarged detail rail. Claims are held
--- until the action card is complete and clipped around its live geometry.
+-- in party and box slots. The detail rail deliberately uses the battle front
+-- artwork instead of enlarging a menu icon.
 local realDrawIcon = PartyMenu.drawIcon
 local realMarkTrueColor = PaletteFX.markTrueColor
+local realSpritePath = Sprites.path
+local realRectangle = graphics.rectangle
+local spriteContexts = {}
 local colorMarks = {}
+local colorFills = {}
 graphics.getPixelDimensions = function() return 1920, 720 end
+local colorLayout = screen:modernPCLayoutInfo()
+local partyInnerW = colorLayout.party.w - 4
+local partyInnerH = colorLayout.party.h - 4
+local function partySlot(index)
+  local row = index - 1
+  local y1 = colorLayout.party.y + 2
+    + math.floor(row * partyInnerH / colorLayout.party.rows)
+  local y2 = colorLayout.party.y + 2
+    + math.floor((row + 1) * partyInnerH / colorLayout.party.rows)
+  return {
+    x = colorLayout.party.x + 2,
+    y = y1,
+    w = partyInnerW,
+    h = y2 - y1,
+  }
+end
+local function inside(rect, bounds)
+  return rect.x >= bounds.x and rect.y >= bounds.y
+    and rect.x + rect.w <= bounds.x + bounds.w
+    and rect.y + rect.h <= bounds.y + bounds.h
+end
+graphics.rectangle = function(mode, x, y, w, h, ...)
+  if mode == "fill" then
+    colorFills[#colorFills + 1] = { x = x, y = y, w = w, h = h }
+  end
+  return realRectangle(mode, x, y, w, h, ...)
+end
+Sprites.path = function(data_, species, side, opts)
+  spriteContexts[#spriteContexts + 1] = {
+    species = species, side = side, kind = opts and opts.kind,
+  }
+  return realSpritePath(data_, species, side, opts)
+end
 PartyMenu.drawIcon = function(_, drawn, x, y)
   if drawn.species == "FIXMON_B" then
     PaletteFX.markTrueColor(x, y, 16, 16)
@@ -312,16 +376,89 @@ T.check(colorOK,
     .. tostring(colorErr))
 local nativeGuard, scaledGuard, wrappedClaim
 for _, rect in ipairs(colorMarks) do
-  if rect.w == 18 and rect.h == 18 then nativeGuard = rect end
+  if rect.w >= 17 and rect.w <= 18
+      and rect.h >= 14 and rect.h <= 18 then nativeGuard = rect end
   if rect.w == 36 and rect.h == 36 then scaledGuard = rect end
   if rect.w == 16 and rect.h == 16 then wrappedClaim = rect end
 end
 T.check(nativeGuard ~= nil,
-  "authored party and box icons receive an 18px true-colour seam guard")
-T.check(scaledGuard ~= nil,
-  "the enlarged detail icon receives a correctly scaled full-colour guard")
+  "authored party and box icons receive a bounded true-colour seam guard")
+T.check(scaledGuard == nil,
+  "the detail rail no longer enlarges a disconnected menu icon")
 T.check(wrappedClaim ~= nil,
   "true-colour claims made by an icon wrapper remain active")
+local selectedSlot = partySlot(1)
+local selectedFace = {
+  x = selectedSlot.x + 2, y = selectedSlot.y + 2,
+  w = selectedSlot.w - 4, h = selectedSlot.h - 4,
+}
+local selectedGuard, selectedBacking
+for _, rect in ipairs(colorMarks) do
+  if rect.x < selectedSlot.x + 20
+      and rect.y < selectedSlot.y + selectedSlot.h
+      and rect.y + rect.h > selectedSlot.y
+      and rect.w >= 12 and rect.h >= 12 then
+    selectedGuard = rect
+  end
+end
+for _, rect in ipairs(colorFills) do
+  if rect.x < selectedSlot.x + 20
+      and rect.y < selectedSlot.y + selectedSlot.h
+      and rect.y + rect.h > selectedSlot.y
+      and rect.w >= 12 and rect.w <= 18
+      and rect.h >= 12 and rect.h <= 18 then
+    selectedBacking = rect
+  end
+end
+T.check(selectedGuard ~= nil and inside(selectedGuard, selectedFace),
+  "selected party icon restoration is clamped inside the black frame")
+T.check(selectedBacking ~= nil and inside(selectedBacking, selectedFace),
+  "selected party icon backing cannot cut into the black frame")
+
+-- The same boundary rule retains the one-pixel border on an ordinary row.
+-- Select the second party member so the authored icon in row one is idle.
+colorMarks, colorFills = {}, {}
+screen.partyIndex = 2
+local idleOK, idleErr = pcall(screen.draw, screen)
+T.check(idleOK,
+  "an unselected authored party icon draws headlessly: " .. tostring(idleErr))
+local idleFace = {
+  x = selectedSlot.x + 1, y = selectedSlot.y + 1,
+  w = selectedSlot.w - 2, h = selectedSlot.h - 2,
+}
+local idleGuard, idleBacking
+for _, rect in ipairs(colorMarks) do
+  if rect.x < selectedSlot.x + 20
+      and rect.y < selectedSlot.y + selectedSlot.h
+      and rect.y + rect.h > selectedSlot.y
+      and rect.w >= 12 and rect.h >= 12 then
+    idleGuard = rect
+  end
+end
+for _, rect in ipairs(colorFills) do
+  if rect.x < selectedSlot.x + 20
+      and rect.y < selectedSlot.y + selectedSlot.h
+      and rect.y + rect.h > selectedSlot.y
+      and rect.w >= 12 and rect.w <= 18
+      and rect.h >= 12 and rect.h <= 18 then
+    idleBacking = rect
+  end
+end
+T.check(idleGuard ~= nil and inside(idleGuard, idleFace),
+  "unselected party icon restoration stays inside the card border")
+T.check(idleBacking ~= nil and inside(idleBacking, idleFace),
+  "unselected party icon backing stays inside the card border")
+screen.partyIndex = 1
+local usedBattleProfile = false
+for _, call in ipairs(spriteContexts) do
+  if call.species == partyA.species and call.side == "front"
+      and call.kind == "battle" then
+    usedBattleProfile = true
+    break
+  end
+end
+T.check(usedBattleProfile,
+  "the PC detail rail resolves the selected battle-front artwork")
 
 colorMarks = {}
 screen.actions = {
@@ -345,6 +482,8 @@ end
 screen.actions = nil
 PartyMenu.drawIcon = realDrawIcon
 PaletteFX.markTrueColor = realMarkTrueColor
+Sprites.path = realSpritePath
+graphics.rectangle = realRectangle
 
 graphics.getPixelDimensions = function() return 640, 576 end
 local compact = screen:modernPCLayoutInfo()
@@ -560,8 +699,8 @@ end
 local fittedOK, fittedErr = pcall(hgssScreen.draw, hgssScreen)
 T.check(fittedOK,
   "alpha-fitted HGSS icons draw headlessly: " .. tostring(fittedErr))
-T.eq(#fittedDraws, 4,
-  "party, box, and detail views use the cropped HGSS renderer")
+T.eq(#fittedDraws, 3,
+  "party and box slots use the cropped HGSS icon renderer")
 T.eq(#hgssRun.loader.exports.HGSS_SPRITES.calls, 0,
   "the fitted path bypasses HGSS's oversized shared 32px renderer")
 
@@ -582,20 +721,10 @@ T.check(math.abs((firstDraw.x + firstW / 2) - (iconX + 8)) <= 0.6
     and math.abs((firstDraw.y + firstH / 2) - (iconY + 8)) <= 0.6,
   "transparent HGSS padding does not shift the centred party sprite")
 
-local detailDraw = fittedDraws[#fittedDraws]
-local detailW = detailDraw.quad.w * detailDraw.sx
-local detailH = detailDraw.quad.h * detailDraw.sy
-T.check(detailW <= 32 and detailH <= 32,
-  "the enlarged HGSS detail portrait stays inside its 32px footprint")
-local oversizedMark = false
-for _, rect in ipairs(hgssMarks) do
-  if rect.w > 32 or rect.h > 32
-      or (rect.w == 32 and rect.h == 32) then
-    oversizedMark = true
-  end
+for _, draw in ipairs(fittedDraws) do
+  T.check(draw.quad.w * draw.sx <= 18 and draw.quad.h * draw.sy <= 18,
+    "each HGSS grid icon stays inside its 18px slot footprint")
 end
-T.check(not oversizedMark,
-  "HGSS no longer restores a grey or oversized full-frame rectangle")
 T.eq(#backingFills, 0,
   "cropped HGSS icons no longer restore rectangular panel backings")
 T.check(#hgssMarks > #fittedDraws,
@@ -613,9 +742,9 @@ local animatedW = animated.quad.w * animated.sx
 local animatedH = animated.quad.h * animated.sy
 T.check(animated.quad.y >= 32 and animatedW <= 18 and animatedH <= 18,
   "the selected icon advances to the second source frame")
-for i = beforeAnimated + 2, beforeAnimated + 4 do
+for i = beforeAnimated + 2, beforeAnimated + 3 do
   T.check(fittedDraws[i] and fittedDraws[i].quad.y < 32,
-    "unselected PC and duplicate detail icons stay on the resting frame")
+    "unselected PC icons stay on the resting frame")
 end
 T.check(math.abs((animated.x + animatedW / 2) - (iconX + 8)) <= 0.6
     and math.abs((animated.y + animatedH / 2) - (iconY + 8)) <= 0.6,
@@ -641,7 +770,7 @@ T.check(statlessOK,
 local statlessBoxDraw = fittedDraws[beforeStatless + 3]
 T.check(statlessBoxDraw and statlessBoxDraw.quad.y >= 32,
   "a highlighted stored Pokémon without battle stats still uses frame two")
-for _, offset in ipairs({ 1, 2, 4 }) do
+for _, offset in ipairs({ 1, 2 }) do
   local draw = fittedDraws[beforeStatless + offset]
   T.check(draw and draw.quad.y < 32,
     "only the highlighted statless box icon animates")
@@ -657,7 +786,7 @@ local clockOK, clockErr = pcall(hgssScreen.draw, hgssScreen)
 love.timer.getTime = oldGetTime
 T.check(clockOK,
   "wall-clock HGSS animation draws: " .. tostring(clockErr))
-for offset = 1, 4 do
+for offset = 1, 3 do
   local draw = fittedDraws[beforeClock + offset]
   T.check(draw and ((offset == 3 and draw.quad.y >= 32)
       or (offset ~= 3 and draw.quad.y < 32)),

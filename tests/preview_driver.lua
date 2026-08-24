@@ -59,6 +59,11 @@ return function(game)
   U.wait(8)
   U.shot(game, DIR .. "/modern_pc_party_transfer.png")
 
+  -- Exercise a selected party icon against the narrow black card frame.
+  screen.region, screen.partyIndex = "party", 3
+  U.wait(8)
+  U.shot(game, DIR .. "/modern_pc_party_frame_clamp.png")
+
   -- The action card retains the less frequent management tools.
   screen.region, screen.partyIndex = "party", 1
   game.input.pressQueue[#game.input.pressQueue + 1] = "start"

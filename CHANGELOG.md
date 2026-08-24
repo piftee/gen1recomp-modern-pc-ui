@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.2.3] - 2026-08-24
+
+### Fixed
+
+- Clamped authored icon backing colours and true-colour restoration to each
+  party or box slot's inner face, preventing sprite backgrounds from cutting
+  into selected black frames or unselected card borders.
+
+## [0.2.2] - 2026-08-23
+
+### Changed
+
+- The wide selected-Pokémon detail rail now shows the exact front sprite
+  selected for battle instead of enlarging a separate menu icon.
+- Party and box grids continue using Unique Menu Icons and fitted HGSS icons,
+  preserving their purpose as compact navigation art.
+- Added regression coverage for battle-context resolution and retained HGSS
+  grid fitting and animation.
+
 ## [0.2.1] - 2026-08-22
 
 ### Changed
