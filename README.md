@@ -11,7 +11,8 @@ format while adopting the direct manipulation used by newer Pokémon games.
 - SELECT focuses the box header; LEFT/RIGHT browse boxes in either direction
   without putting a carried Pokémon down
 - START provides Summary, one-step transfer, Release, and companion actions
-- selected Pokémon show their name, level, type, HP, and current location
+- selected Pokémon show their battle-front artwork, name, level, type, HP,
+  and current location
 - empty party and box positions remain visible
 - widescreen displays add a full detail rail and named party cards
 - compact 160×144 displays retain the same party-and-box workflow
@@ -59,8 +60,10 @@ Modern PC UI uses Gen1Recomp's shared Pokémon icon renderer, so species icons,
 runtime icon hooks, and compatible icon replacement mods continue to work.
 Authored full-colour replacements—including **Unique Menu Icons** and icon
 wrappers used by **Wilds of Kanto**—are protected from the PC's type palettes in
-party slots, box slots, and the enlarged detail portrait. Protection is clipped
-around the live action popup so covered icons cannot repaint the popup.
+party and box slots. Protection is clipped around the live action popup so
+covered icons cannot repaint the popup. The wide detail rail uses the same
+`battle` front-sprite selection as combat instead, preventing a menu icon from
+being mistaken for the Pokémon's in-battle appearance.
 
 **HGSS Visual Overhaul** is handled separately because its party artwork uses
 padded 32×32 frames rather than Gen 1's 16×16 icon contract. Modern PC UI reads

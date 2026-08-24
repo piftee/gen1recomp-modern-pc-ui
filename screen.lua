@@ -63,6 +63,7 @@ return function(mod, genderExports, compatibility)
 
   local inkShader -- false if the host has no shader support
   local fittedHgssIcons = {}
+  local battleProfileSprites = {}
 
   local function iconAnimationEnabled(screen)
     local loader = screen and screen.game and screen.game.mods
@@ -261,6 +262,128 @@ return function(mod, genderExports, compatibility)
     return TYPE_PALETTES[tostring(primary or "NORMAL"):upper()]
       or PaletteFX.monPal(screen.game.data, mon and mon.species)
       or PaletteFX.pal(screen.game.data, "BLUEMON")
+  end
+
+  local WARM_SGB_PORTRAITS = {
+    REDMON = true, YELLOWMON = true, BROWNMON = true,
+  }
+
+  -- Large PC portraits need more separation than SGB's pale warm ramps give
+  -- them. Keep the surrounding SGB UI exactly as-is and borrow only the
+  -- stronger Advanced REDMON/YELLOWMON/BROWNMON ramps for grayscale battle
+  -- art. Other SGB colours, authored true-colour sprites and non-SGB modes
+  -- continue through their existing paths unchanged.
+  local function portraitArtPalette(data, species)
+    local palette = PaletteFX.monPal(data, species)
+    local mode = PaletteFX.mode
+    if mode ~= "gbc" and mode ~= "gbc_inv" then return palette end
+    local name = PaletteFX.monPalName(data, species)
+    if not WARM_SGB_PORTRAITS[name] then return palette end
+    local pack = PaletteFX.gbcPack and PaletteFX.gbcPack() or nil
+    return pack and pack.palettes and pack.palettes[name] or palette
+  end
+
+  local function paletteKey(colors)
+    local out = {}
+    for i = 1, 4 do
+      local color = colors and colors[i] or {}
+      out[#out + 1] = tostring(color[1] or 0)
+      out[#out + 1] = tostring(color[2] or 0)
+      out[#out + 1] = tostring(color[3] or 0)
+    end
+    return table.concat(out, ":")
+  end
+
+  -- Build the selected-Pokémon portrait from the exact front-sprite context
+  -- used by BattleState. The icon grid still respects HGSS/Unique Icons, but
+  -- the PC detail rail now previews what the Pokémon actually looks like in
+  -- battle rather than enlarging a separate menu-icon design.
+  local function battleProfileSprite(screen, mon)
+    local path, trueColor = Sprites.path(screen.game.data, mon.species,
+      "front", { mon = mon, kind = "battle" })
+    if not path then return nil end
+    local colors = PaletteFX.effectiveColors(
+      portraitArtPalette(screen.game.data, mon.species)
+        or monPalette(screen, mon))
+    local key = path .. (trueColor and "#true" or ("#" .. paletteKey(colors)))
+    local cached = battleProfileSprites[key]
+    if cached ~= nil then return cached or nil end
+
+    if trueColor then
+      local ok, image = pcall(Assets.image, path)
+      cached = ok and image or false
+      battleProfileSprites[key] = cached
+      return cached or nil
+    end
+    if not (colors and love.image and love.image.newImageData) then
+      battleProfileSprites[key] = false
+      return nil
+    end
+    local ok, data = pcall(Assets.imageData, path)
+    if not ok or not data then
+      battleProfileSprites[key] = false
+      return nil
+    end
+    local width, height = data:getDimensions()
+    local outside, queueX, queueY, head = {}, {}, {}, 1
+    local function pixelIndex(x, y) return y * width + x + 1 end
+    local function matte(x, y)
+      local r, g, b, a = data:getPixel(x, y)
+      return a <= 0 or (r > 0.83 and g > 0.83 and b > 0.83)
+    end
+    local function visit(x, y)
+      if x < 0 or y < 0 or x >= width or y >= height then return end
+      local index = pixelIndex(x, y)
+      if outside[index] or not matte(x, y) then return end
+      outside[index] = true
+      queueX[#queueX + 1], queueY[#queueY + 1] = x, y
+    end
+    for x = 0, width - 1 do visit(x, 0); visit(x, height - 1) end
+    for y = 1, height - 2 do visit(0, y); visit(width - 1, y) end
+    while head <= #queueX do
+      local x, y = queueX[head], queueY[head]
+      head = head + 1
+      visit(x - 1, y); visit(x + 1, y)
+      visit(x, y - 1); visit(x, y + 1)
+    end
+    data:mapPixel(function(x, y, r, g, b, a)
+      if a <= 0 or outside[pixelIndex(x, y)] then return r, g, b, 0 end
+      local color = r > 0.83 and colors[1] or r > 0.5 and colors[2]
+        or r > 0.17 and colors[3] or colors[4]
+      return color[1] / 255, color[2] / 255, color[3] / 255, a
+    end)
+    local made, image = pcall(love.graphics.newImage, data)
+    cached = made and image or false
+    if cached and cached.setFilter then cached:setFilter("nearest", "nearest") end
+    battleProfileSprites[key] = cached
+    return cached or nil
+  end
+
+  local function drawBattleProfile(screen, mon, rect, trueColorRegions,
+      background)
+    local image = battleProfileSprite(screen, mon)
+    if not image then return false end
+    local iw, ih = image:getDimensions()
+    local scale = math.min(1, rect.w / math.max(1, iw),
+      rect.h / math.max(1, ih))
+    local x = math.floor(rect.x + (rect.w - iw * scale) / 2 + 0.5)
+    local y = math.floor(rect.y + (rect.h - ih * scale) / 2 + 0.5)
+    if background then
+      love.graphics.push("all")
+      love.graphics.setColor((background[1] or 0) / 255,
+        (background[2] or 0) / 255, (background[3] or 0) / 255, 1)
+      love.graphics.rectangle("fill", x - 1, y - 1,
+        iw * scale + 2, ih * scale + 2)
+      love.graphics.pop()
+    end
+    love.graphics.push("all")
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(image, x, y, 0, scale, scale)
+    love.graphics.pop()
+    trueColorRegions[#trueColorRegions + 1] = {
+      x = x - 1, y = y - 1, w = iw * scale + 2, h = ih * scale + 2,
+    }
+    return true
   end
 
   local function ensurePartyMon(screen, mon)
@@ -755,12 +878,35 @@ return function(mod, genderExports, compatibility)
       and path:find("hgss", 1, true) ~= nil
   end
 
-  local function fillTrueColorBacking(color, x, y, width, height)
+  local function clippedRegion(x, y, width, height, clip)
+    x, y = tonumber(x), tonumber(y)
+    width, height = tonumber(width), tonumber(height)
+    if not (x and y and width and height and width > 0 and height > 0) then
+      return nil
+    end
+    if not clip then return { x = x, y = y, w = width, h = height } end
+    local x2, y2 = x + width, y + height
+    local cx2, cy2 = clip.x + clip.w, clip.y + clip.h
+    local ix, iy = math.max(x, clip.x), math.max(y, clip.y)
+    local ix2, iy2 = math.min(x2, cx2), math.min(y2, cy2)
+    if ix2 <= ix or iy2 <= iy then return nil end
+    return { x = ix, y = iy, w = ix2 - ix, h = iy2 - iy }
+  end
+
+  local function addTrueColorRegion(regions, x, y, width, height, clip)
+    local rect = clippedRegion(x, y, width, height, clip)
+    if rect then regions[#regions + 1] = rect end
+    return rect
+  end
+
+  local function fillTrueColorBacking(color, x, y, width, height, clip)
     if not color then return end
+    local rect = clippedRegion(x, y, width, height, clip)
+    if not rect then return end
     love.graphics.push("all")
     love.graphics.setColor((color[1] or 0) / 255,
       (color[2] or 0) / 255, (color[3] or 0) / 255, 1)
-    love.graphics.rectangle("fill", x, y, width, height)
+    love.graphics.rectangle("fill", rect.x, rect.y, rect.w, rect.h)
     love.graphics.pop()
   end
 
@@ -768,17 +914,15 @@ return function(mod, genderExports, compatibility)
   -- it publishes. The transform is anchored at the requested icon origin so
   -- both enlarged details and a reduced compatibility fallback stay centred.
   local function drawSharedIcon(screen, mon, x, y, animate, scale,
-      trueColorRegions)
+      trueColorRegions, clip)
     scale = tonumber(scale) or 1
     local originalMark = PaletteFX.markTrueColor
     PaletteFX.markTrueColor = function(rx, ry, rw, rh)
       rx, ry, rw, rh = tonumber(rx), tonumber(ry), tonumber(rw), tonumber(rh)
       if not (rx and ry and rw and rh and rw > 0 and rh > 0) then return end
-      trueColorRegions[#trueColorRegions + 1] = {
-        x = x + (rx - x) * scale,
-        y = y + (ry - y) * scale,
-        w = rw * scale, h = rh * scale,
-      }
+      addTrueColorRegion(trueColorRegions,
+        x + (rx - x) * scale, y + (ry - y) * scale,
+        rw * scale, rh * scale, clip)
     end
 
     love.graphics.push("all")
@@ -801,7 +945,7 @@ return function(mod, genderExports, compatibility)
   -- neighbouring slots. It also lets us protect only the pixels occupied by
   -- the fitted sprite, instead of restoring a grey 32x32 rectangle afterward.
   local function drawFittedHgssIcon(screen, mon, entry, x, y, animate,
-      target, trueColorRegions, background)
+      target, trueColorRegions, background, clip)
     if not (love.image and love.image.newImageData
         and love.graphics.newQuad) then return false end
     local path = Sprites.iconPath(screen.game.data, mon, entry.image, {})
@@ -899,12 +1043,10 @@ return function(mod, genderExports, compatibility)
     -- footprint also restores its transparent interior from the unpaletted
     -- canvas, which appears as a darker square on type-coloured panels.
     for _, run in ipairs(bounds.runs or {}) do
-      trueColorRegions[#trueColorRegions + 1] = {
-        x = drawX + (run.x - bounds.x) * fittedScale,
-        y = drawY + (run.y - (bounds.y % 32)) * fittedScale,
-        w = math.max(1, run.w * fittedScale),
-        h = math.max(1, fittedScale),
-      }
+      addTrueColorRegion(trueColorRegions,
+        drawX + (run.x - bounds.x) * fittedScale,
+        drawY + (run.y - (bounds.y % 32)) * fittedScale,
+        math.max(1, run.w * fittedScale), math.max(1, fittedScale), clip)
     end
     return true
   end
@@ -914,7 +1056,7 @@ return function(mod, genderExports, compatibility)
   -- have been drawn. HGSS receives a dedicated alpha-bound path because its
   -- native 32px contract is intentionally larger than Gen 1's 16px cells.
   local function drawMonIcon(screen, mon, x, y, animate, scale,
-      trueColorRegions, background)
+      trueColorRegions, background, clip)
     if not mon then return end
     scale = math.max(1, math.floor(tonumber(scale) or 1))
     x, y = math.floor(x), math.floor(y)
@@ -926,34 +1068,32 @@ return function(mod, genderExports, compatibility)
       local zoneY = scale > 1 and y or y - 1
       if drawFittedHgssIcon(screen, mon, entry, zoneX, zoneY,
           animate, target,
-          trueColorRegions, background) then
+          trueColorRegions, background, clip) then
         return
       end
 
       -- Hosts without readable ImageData still get safe dimensions. Painting
       -- the finished panel colour underneath the reduced source prevents its
       -- full-canvas true-colour claim from becoming a grey backplate.
-      fillTrueColorBacking(background, zoneX, zoneY, target, target)
+      fillTrueColorBacking(background, zoneX, zoneY, target, target, clip)
       drawSharedIcon(screen, mon, zoneX, zoneY, animate,
-        target / 32, trueColorRegions)
-      trueColorRegions[#trueColorRegions + 1] = {
-        x = zoneX, y = zoneY, w = target, h = target,
-      }
+        target / 32, trueColorRegions, clip)
+      addTrueColorRegion(trueColorRegions,
+        zoneX, zoneY, target, target, clip)
       return
     end
 
     local authored = isAuthoredIcon(screen, mon)
     if authored then
       fillTrueColorBacking(background, x - scale, y - scale,
-        18 * scale, 18 * scale)
+        18 * scale, 18 * scale, clip)
     end
-    drawSharedIcon(screen, mon, x, y, animate, scale, trueColorRegions)
+    drawSharedIcon(screen, mon, x, y, animate, scale,
+      trueColorRegions, clip)
 
     if authored then
-      trueColorRegions[#trueColorRegions + 1] = {
-        x = x - scale, y = y - scale,
-        w = 18 * scale, h = 18 * scale,
-      }
+      addTrueColorRegion(trueColorRegions,
+        x - scale, y - scale, 18 * scale, 18 * scale, clip)
     end
   end
 
@@ -1032,11 +1172,17 @@ return function(mod, genderExports, compatibility)
       local face = chosen
         and colorFromPalette(selectedPalette(screen), 3)
         or colorFromPalette(monPalette(screen, mon), 1)
+      local faceInset = chosen and 2 or 1
+      local iconClip = {
+        x = rect.x + faceInset, y = rect.y + faceInset,
+        w = math.max(1, rect.w - faceInset * 2),
+        h = math.max(1, rect.h - faceInset * 2),
+      }
       if region == "party" and not layout.compact then
         drawMonIcon(screen, mon, rect.x + 2,
           rect.y + math.max(0, math.floor((rect.h - 16) / 2)),
           iconAnimationEnabled(screen) and chosen, 1,
-          trueColorRegions, face)
+          trueColorRegions, face, iconClip)
         local ink = chosen and WHITE or BLACK
         drawText(monName(screen, mon), rect.x + 20, rect.y + 2,
           rect.w - 23, ink)
@@ -1050,7 +1196,7 @@ return function(mod, genderExports, compatibility)
           rect.x + math.floor((rect.w - 16) / 2),
           rect.y + math.floor((rect.h - 16) / 2),
           iconAnimationEnabled(screen) and chosen, 1,
-          trueColorRegions, face)
+          trueColorRegions, face, iconClip)
       end
     end
 
@@ -1100,13 +1246,22 @@ return function(mod, genderExports, compatibility)
       return
     end
 
-    local iconScale = layout.detail.w >= 76 and 2 or 1
-    local iconSize = 16 * iconScale
-    drawMonIcon(screen, mon,
-      layout.detail.x + math.floor((layout.detail.w - iconSize) / 2),
-      layout.detail.y + 8, false, iconScale,
-      trueColorRegions, detailFace)
-    local infoY = layout.detail.y + 14 + iconSize
+    local portraitH = math.min(50, math.max(36,
+      layout.detail.h - 64))
+    local drewPortrait = drawBattleProfile(screen, mon, {
+      x = layout.detail.x + 5, y = layout.detail.y + 5,
+      w = layout.detail.w - 10, h = portraitH,
+    }, trueColorRegions, detailFace)
+    if not drewPortrait then
+      local iconScale = layout.detail.w >= 76 and 2 or 1
+      local iconSize = 16 * iconScale
+      drawMonIcon(screen, mon,
+        layout.detail.x + math.floor((layout.detail.w - iconSize) / 2),
+        layout.detail.y + 8, false, iconScale,
+        trueColorRegions, detailFace)
+      portraitH = 9 + iconSize
+    end
+    local infoY = layout.detail.y + 8 + portraitH
     drawCentered(name, layout.detail.x + layout.detail.w / 2,
       infoY, layout.detail.w - 10, WHITE)
     local levelText = Strings("LV%d", mon.level or 1)
