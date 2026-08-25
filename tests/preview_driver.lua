@@ -79,6 +79,10 @@ return function(game)
   U.tap(game, "select")
   U.wait(4)
   U.shot(game, DIR .. "/modern_pc_box_selector.png")
+  U.tap(game, "a")
+  U.wait(4)
+  U.shot(game, DIR .. "/modern_pc_all_boxes.png")
+  U.tap(game, "b")
   U.tap(game, "right")
   U.tap(game, "down")
   game.writeSave = writeSave
@@ -97,13 +101,32 @@ return function(game)
   U.shot(game, DIR .. "/modern_pc_release_confirmation.png")
   while game.stack:top() ~= screen do game.stack:pop() end
 
-  -- Classic 160x144 keeps the same functionality with compact icon grids.
+  -- A medium 4:3-ish desktop window still uses the redesigned workspace.
+  love.window.setMode(820, 600, {
+    resizable = true, minwidth = 640, minheight = 576,
+  })
+  U.wait(12)
+  U.shot(game, DIR .. "/modern_pc_medium_workspace.png")
+
+  -- Portrait phones use a tall 160px-wide box, party, and detail workspace.
+  screen.held = nil
+  screen.region, screen.partyIndex = "party", 3
+  love.window.setMode(480, 1024, {
+    resizable = true, minwidth = 160, minheight = 144,
+  })
+  U.wait(12)
+  U.shot(game, DIR .. "/modern_pc_phone_portrait.png")
+
+  -- Classic 160x144 uses the same compact arrangement as portrait phones.
   love.window.setMode(640, 576, {
     resizable = true, minwidth = 640, minheight = 576,
   })
   U.wait(12)
-  U.shot(game, DIR .. "/modern_pc_compact.png")
+  U.shot(game, DIR .. "/modern_pc_narrow_workspace.png")
   U.tap(game, "select")
   U.wait(4)
-  U.shot(game, DIR .. "/modern_pc_compact_box_selector.png")
+  U.shot(game, DIR .. "/modern_pc_narrow_box_selector.png")
+  U.tap(game, "a")
+  U.wait(4)
+  U.shot(game, DIR .. "/modern_pc_narrow_all_boxes.png")
 end

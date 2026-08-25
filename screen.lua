@@ -19,10 +19,17 @@ return function(mod, genderExports, compatibility)
   local Strings = require("src.core.Strings")
   local TextBox = require("src.render.TextBox")
   local Theme = require("src.ui.Theme")
+  local TouchControls = require("src.core.TouchControls")
 
   local SCREEN_H = 144
   local HEADER_H = 16
   local FOOTER_Y = 136
+  local PORTRAIT_MIN_H = 224
+  -- Storage needs enough height for box + party + a generous detail card, but
+  -- letting that card absorb an arbitrarily tall phone/desktop window turns it
+  -- into a mostly empty black column. Cap the complete portrait canvas instead.
+  local PORTRAIT_MAX_H = 256
+  local BOX_PICKER_COLS = 4
   local WHITE = 1
   local LIGHT = 170 / 255
   local DARK = 85 / 255
@@ -184,46 +191,120 @@ return function(mod, genderExports, compatibility)
     end
   end
 
-  local function responsiveWidth()
+  local function displayPixels()
     local width, height
     if love.graphics.getPixelDimensions then
       width, height = love.graphics.getPixelDimensions()
     else
       width, height = love.graphics.getDimensions()
     end
-    width, height = tonumber(width) or 160, tonumber(height) or SCREEN_H
+    return tonumber(width) or 160, tonumber(height) or SCREEN_H
+  end
+
+  local function responsiveSize()
+    local width, height = displayPixels()
+    local portraitScale = math.max(1, math.floor(width / 160))
+    local portraitHeight = math.min(PORTRAIT_MAX_H,
+      math.floor(height / portraitScale))
+    if height >= width * 1.35 and portraitHeight >= PORTRAIT_MIN_H then
+      return 160, portraitHeight
+    end
     local scale = math.max(1, math.floor(math.min(
       width / (Renderer.WIDTH or 160), height / SCREEN_H)))
     return math.min(Renderer.MAX_UI_WIDTH or 640,
-      math.max(160, math.floor(width / scale)))
+      math.max(160, math.floor(width / scale))), SCREEN_H
+  end
+
+  local function portraitControlsTop(pixelWidth, pixelHeight)
+    if pixelHeight <= pixelWidth then return nil end
+    local okVisible, visible = pcall(TouchControls.visible, TouchControls)
+    if not okVisible or not visible then return nil end
+    local okLayout, controls = pcall(TouchControls.layout, TouchControls)
+    if not okLayout or type(controls) ~= "table" then return nil end
+    local _, unitHeight = love.graphics.getDimensions()
+    unitHeight = tonumber(unitHeight) or pixelHeight
+    if unitHeight <= 0 then return nil end
+    local dpiY = pixelHeight / unitHeight
+    local top
+    for _, name in ipairs({ "dpad", "a", "b", "start", "select" }) do
+      local zone = controls[name]
+      if type(zone) == "table" and tonumber(zone.cy)
+          and tonumber(zone.w) then
+        local y = (zone.cy - zone.w * 0.58) * dpiY
+        top = top and math.min(top, y) or y
+      end
+    end
+    return top and math.max(SCREEN_H, math.floor(top)) or nil
   end
 
   local function layoutFor(screen)
-    local width = responsiveWidth()
+    local width, height = responsiveSize()
     local renderer = screen and screen.game and screen.game.renderer
     if renderer and renderer.uiSize then
-      width = select(1, renderer:uiSize()) or width
+      local rendererW, rendererH = renderer:uiSize()
+      width, height = rendererW or width, rendererH or height
     end
     width = math.max(160, math.floor(width))
+    height = math.max(SCREEN_H, math.floor(height))
+    local canvasHeight = height
+    local portrait = height >= PORTRAIT_MIN_H and height >= width * 1.35
 
-    if width < 252 then
+    if portrait then
+      local pixelWidth, pixelHeight = displayPixels()
+      local controlsTop = portraitControlsTop(pixelWidth, pixelHeight)
+      if controlsTop then
+        local scale = math.max(1, math.floor(math.min(
+          pixelWidth / width, pixelHeight / canvasHeight)))
+        local offsetY = math.max(0,
+          math.floor((pixelHeight - canvasHeight * scale) / 2))
+        local usableHeight = math.floor((controlsTop - offsetY) / scale)
+        if usableHeight >= PORTRAIT_MIN_H then
+          height = math.min(height, usableHeight)
+        end
+      end
+      local footerY = height - 8
+      local boxH = 84
+      local partyH = 27
+      local boxY = 19
+      local partyY = boxY + boxH + 3
+      local detailY = partyY + partyH + 3
       return {
-        width = width, height = SCREEN_H, compact = true,
+        width = width, height = height, canvasHeight = canvasHeight,
+        footerY = footerY, portrait = true,
+        box = { x = 2, y = boxY, w = width - 4, h = boxH,
+          cols = 5, rows = 4 },
+        party = { x = 2, y = partyY, w = width - 4, h = partyH,
+          cols = 6, rows = 1 },
+        detail = { x = 2, y = detailY, w = width - 4,
+          h = math.max(28, footerY - detailY - 2) },
+      }
+    end
+
+    if width < 192 then
+      return {
+        width = width, height = SCREEN_H, canvasHeight = SCREEN_H,
+        footerY = FOOTER_Y, compact = true,
         party = { x = 2, y = 19, w = 43, h = 84, cols = 2, rows = 3 },
         box = { x = 48, y = 19, w = width - 50, h = 84, cols = 5, rows = 4 },
         detail = { x = 2, y = 106, w = width - 4, h = 28 },
       }
     end
 
-    local partyW = math.min(96, math.max(72, math.floor(width * 0.25)))
-    local detailW = math.min(112, math.max(64, math.floor(width * 0.25)))
-    local boxX = partyW + 6
+    local detailW = math.min(96, math.max(43, math.floor(width * 0.25)))
+    local workX = detailW + 6
+    local workW = width - workX - 3
+    local partyH = 27
+    local panelGap = 3
+    local boxH = 115 - partyH - panelGap
     return {
-      width = width, height = SCREEN_H, compact = false,
-      party = { x = 3, y = 19, w = partyW, h = 115, cols = 1, rows = 6 },
-      box = { x = boxX, y = 19,
-        w = width - boxX - detailW - 6, h = 115, cols = 5, rows = 4 },
-      detail = { x = width - detailW - 3, y = 19, w = detailW, h = 115 },
+      width = width, height = SCREEN_H, canvasHeight = SCREEN_H,
+      footerY = FOOTER_Y,
+      narrow = width < 192,
+      detail = { x = 3, y = 19, w = detailW, h = 115 },
+      box = { x = workX, y = 19,
+        w = workW, h = boxH, cols = 5, rows = 4 },
+      party = { x = workX, y = 19 + boxH + panelGap,
+        w = workW, h = partyH, cols = 6, rows = 1 },
     }
   end
 
@@ -430,6 +511,8 @@ return function(mod, genderExports, compatibility)
     screen.boxSwitchReturnRegion = screen.held and "box" or screen.region
     screen.region = "box"
     screen.boxSwitching = true
+    screen.boxPicker = false
+    screen.boxPickerIndex = screen.game.save.currentBox
     screen.status = nil
     play(screen, "Press_AB")
   end
@@ -437,20 +520,34 @@ return function(mod, genderExports, compatibility)
   local function endBoxSwitcher(screen)
     if not screen.boxSwitching then return end
     screen.boxSwitching = false
+    screen.boxPicker = false
     screen.region = screen.boxSwitchReturnRegion or "box"
     screen.boxSwitchReturnRegion = nil
     screen.status = nil
     play(screen, "Press_AB")
   end
 
-  local function nearestIndex(layout, region, sourceY, enteringFromLeft)
+  local function nearestIndexByX(layout, region, sourceX, desiredRow)
     local panel = layout[region]
     local capacity = region == "party" and Party.MAX or Boxes.CAPACITY
     local best, distance = 1, math.huge
     for index = 1, capacity do
-      local zero = index - 1
-      local column = zero % panel.cols
-      local desiredColumn = enteringFromLeft and 0 or (panel.cols - 1)
+      local row = math.floor((index - 1) / panel.cols)
+      if row == desiredRow then
+        local rect = slotRect(layout, region, index)
+        local d = math.abs(rect.x + rect.w / 2 - sourceX)
+        if d < distance then best, distance = index, d end
+      end
+    end
+    return best
+  end
+
+  local function nearestIndexByY(layout, region, sourceY, desiredColumn)
+    local panel = layout[region]
+    local capacity = region == "party" and Party.MAX or Boxes.CAPACITY
+    local best, distance = 1, math.huge
+    for index = 1, capacity do
+      local column = (index - 1) % panel.cols
       if column == desiredColumn then
         local rect = slotRect(layout, region, index)
         local d = math.abs(rect.y + rect.h / 2 - sourceY)
@@ -460,6 +557,8 @@ return function(mod, genderExports, compatibility)
     return best
   end
 
+  local switchBox
+
   local function moveCursor(screen, direction)
     local layout = layoutFor(screen)
     local panel = layout[screen.region]
@@ -467,32 +566,77 @@ return function(mod, genderExports, compatibility)
     local zero = index - 1
     local column, row = zero % panel.cols, math.floor(zero / panel.cols)
 
-    if direction == "left" then
-      if column > 0 then
-        setCurrentIndex(screen, index - 1)
-      elseif screen.region == "box" then
-        local rect = slotRect(layout, "box", index)
-        screen.region = "party"
-        screen.partyIndex = nearestIndex(layout, "party",
-          rect.y + rect.h / 2, false)
+    if layout.compact then
+      if direction == "left" then
+        if column > 0 then
+          setCurrentIndex(screen, index - 1)
+        elseif screen.region == "box" then
+          local rect = slotRect(layout, "box", index)
+          screen.region = "party"
+          screen.partyIndex = nearestIndexByY(layout, "party",
+            rect.y + rect.h / 2, layout.party.cols - 1)
+        end
+      elseif direction == "right" then
+        if column < panel.cols - 1 then
+          setCurrentIndex(screen, index + 1)
+        elseif screen.region == "party" then
+          local rect = slotRect(layout, "party", index)
+          screen.region = "box"
+          screen.boxIndex = nearestIndexByY(layout, "box",
+            rect.y + rect.h / 2, 0)
+        end
+      elseif direction == "up" then
+        if row > 0 then
+          setCurrentIndex(screen, index - panel.cols)
+        elseif screen.region == "box" then
+          beginBoxSwitcher(screen)
+        end
+      elseif direction == "down" and row < panel.rows - 1 then
+        setCurrentIndex(screen, index + panel.cols)
       end
-    elseif direction == "right" then
-      if column < panel.cols - 1 then
+      return
+    end
+
+    if screen.region == "box" then
+      if direction == "left" then
+        if column > 0 then
+          setCurrentIndex(screen, index - 1)
+        else
+          switchBox(screen, -1)
+        end
+      elseif direction == "right" then
+        if column < panel.cols - 1 then
+          setCurrentIndex(screen, index + 1)
+        else
+          switchBox(screen, 1)
+        end
+      elseif direction == "up" then
+        if row > 0 then
+          setCurrentIndex(screen, index - panel.cols)
+        else
+          beginBoxSwitcher(screen)
+        end
+      elseif direction == "down" then
+        if row < panel.rows - 1 then
+          setCurrentIndex(screen, index + panel.cols)
+        else
+          local rect = slotRect(layout, "box", index)
+          screen.region = "party"
+          screen.partyIndex = nearestIndexByX(layout, "party",
+            rect.x + rect.w / 2, 0)
+        end
+      end
+    else
+      if direction == "left" and column > 0 then
+        setCurrentIndex(screen, index - 1)
+      elseif direction == "right" and column < panel.cols - 1 then
         setCurrentIndex(screen, index + 1)
-      elseif screen.region == "party" then
+      elseif direction == "up" then
         local rect = slotRect(layout, "party", index)
         screen.region = "box"
-        screen.boxIndex = nearestIndex(layout, "box",
-          rect.y + rect.h / 2, true)
+        screen.boxIndex = nearestIndexByX(layout, "box",
+          rect.x + rect.w / 2, layout.box.rows - 1)
       end
-    elseif direction == "up" then
-      if row > 0 then
-        setCurrentIndex(screen, index - panel.cols)
-      elseif screen.region == "box" then
-        beginBoxSwitcher(screen)
-      end
-    elseif direction == "down" and row < panel.rows - 1 then
-      setCurrentIndex(screen, index + panel.cols)
     end
   end
 
@@ -579,13 +723,21 @@ return function(mod, genderExports, compatibility)
     return true
   end
 
-  local function switchBox(screen, delta)
+  local function openBox(screen, index)
     local count = Boxes.COUNT
-    screen.game.save.currentBox =
-      ((screen.game.save.currentBox - 1 + delta) % count) + 1
+    index = math.max(1, math.min(count, math.floor(tonumber(index) or 1)))
+    if screen.game.save.currentBox == index then return false end
+    screen.game.save.currentBox = index
     screen.status = Strings("Opened BOX %02d.", screen.game.save.currentBox)
     if screen.game.writeSave then screen.game:writeSave() end
     play(screen, "Swap")
+    return true
+  end
+
+  switchBox = function(screen, delta)
+    local count = Boxes.COUNT
+    return openBox(screen,
+      ((screen.game.save.currentBox - 1 + delta) % count) + 1)
   end
 
   local function quickTransfer(screen)
@@ -716,14 +868,39 @@ return function(mod, genderExports, compatibility)
 
   local function updateBoxSwitcher(screen)
     local input = screen.game.input
-    if input:wasPressed("left") then
+    if screen.boxPicker then
+      local index = screen.boxPickerIndex or screen.game.save.currentBox
+      local columns = BOX_PICKER_COLS
+      local column = (index - 1) % columns
+      if input:wasPressed("left") and column > 0 then
+        screen.boxPickerIndex = index - 1
+      elseif input:wasPressed("right")
+          and column < columns - 1 and index < Boxes.COUNT then
+        screen.boxPickerIndex = index + 1
+      elseif input:wasPressed("up") and index > columns then
+        screen.boxPickerIndex = index - columns
+      elseif input:wasPressed("down") and index + columns <= Boxes.COUNT then
+        screen.boxPickerIndex = index + columns
+      elseif input:wasPressed("a") then
+        openBox(screen, index)
+        endBoxSwitcher(screen)
+      elseif input:wasPressed("b") then
+        screen.boxPicker = false
+        play(screen, "Press_AB")
+      end
+    elseif input:wasPressed("left") then
       switchBox(screen, -1)
       screen.status = nil
     elseif input:wasPressed("right") then
       switchBox(screen, 1)
       screen.status = nil
-    elseif input:wasPressed("a") or input:wasPressed("b")
-        or input:wasPressed("down") or input:wasPressed("select") then
+    elseif input:wasPressed("a") then
+      screen.boxPicker = true
+      screen.boxPickerIndex = screen.game.save.currentBox
+      screen.status = nil
+      play(screen, "Press_AB")
+    elseif input:wasPressed("b") or input:wasPressed("down")
+        or input:wasPressed("select") then
       endBoxSwitcher(screen)
     end
   end
@@ -792,12 +969,15 @@ return function(mod, genderExports, compatibility)
   end
 
   local function drawBackdrop(layout)
+    gray(BLACK)
+    love.graphics.rectangle("fill", 0, 0,
+      layout.width, layout.canvasHeight or layout.height)
     gray(WHITE)
     love.graphics.rectangle("fill", 0, 0, layout.width, layout.height)
     gray(LIGHT)
     for x = -SCREEN_H, layout.width, 16 do
-      love.graphics.line(x, HEADER_H, x + SCREEN_H, FOOTER_Y)
-      love.graphics.line(x + SCREEN_H, HEADER_H, x, FOOTER_Y)
+      love.graphics.line(x, HEADER_H, x + SCREEN_H, layout.footerY)
+      love.graphics.line(x + SCREEN_H, HEADER_H, x, layout.footerY)
     end
   end
 
@@ -808,10 +988,10 @@ return function(mod, genderExports, compatibility)
     love.graphics.rectangle("fill", 0, HEADER_H - 2, layout.width, 2)
 
     local box = Boxes.active(screen.game.save)
-    local label = layout.compact
-      and Strings("BOX%02d", screen.game.save.currentBox)
-      or Strings("BOX%02d %02d/%02d",
-        screen.game.save.currentBox, #box, Boxes.CAPACITY)
+    local label = screen.boxPicker and Strings("ALL BOXES")
+      or (layout.compact and Strings("BOX%02d", screen.game.save.currentBox)
+        or Strings("BOX%02d %02d/%02d",
+          screen.game.save.currentBox, #box, Boxes.CAPACITY))
     local selectorW = math.min(layout.box.w - 2, Font.width(label) + 16)
     local selectorX = layout.compact and layout.box.x + 1
       or math.floor(layout.box.x + (layout.box.w - selectorW) / 2)
@@ -844,9 +1024,7 @@ return function(mod, genderExports, compatibility)
       drawText(Strings("PARTY"), 4, 4, 40, WHITE)
       drawRight(("%02d/%02d"):format(#box, Boxes.CAPACITY),
         layout.width - 4, 4, 48, WHITE)
-    else
-      drawCentered(Strings("PARTY"), layout.party.x + layout.party.w / 2,
-        4, layout.party.w - 8, WHITE)
+    elseif not layout.portrait then
       drawCentered(Strings("DETAILS"),
         layout.detail.x + layout.detail.w / 2, 4,
         layout.detail.w - 8, WHITE)
@@ -1178,7 +1356,7 @@ return function(mod, genderExports, compatibility)
         w = math.max(1, rect.w - faceInset * 2),
         h = math.max(1, rect.h - faceInset * 2),
       }
-      if region == "party" and not layout.compact then
+      if region == "party" and layout.party.cols == 1 then
         drawMonIcon(screen, mon, rect.x + 2,
           rect.y + math.max(0, math.floor((rect.h - 16) / 2)),
           iconAnimationEnabled(screen) and chosen, 1,
@@ -1227,6 +1405,40 @@ return function(mod, genderExports, compatibility)
       or (screen.region == "party" and Strings("PARTY")
         or Strings("BOX %02d", screen.game.save.currentBox))
     local detailFace = colorFromPalette(monPalette(screen, mon), 4)
+
+    if layout.portrait then
+      local portraitW = math.min(68,
+        math.max(52, math.floor(layout.detail.w * 0.44)))
+      local drewPortrait = drawBattleProfile(screen, mon, {
+        x = layout.detail.x + 5, y = layout.detail.y + 5,
+        w = portraitW - 10, h = layout.detail.h - 10,
+      }, trueColorRegions, detailFace)
+      if not drewPortrait then
+        drawMonIcon(screen, mon,
+          layout.detail.x + math.floor((portraitW - 32) / 2),
+          layout.detail.y + math.floor((layout.detail.h - 32) / 2),
+          false, 2, trueColorRegions, detailFace)
+      end
+      local infoX = layout.detail.x + portraitW + 2
+      local infoW = layout.detail.w - portraitW - 7
+      local infoY = layout.detail.y + 9
+      drawText(name, infoX, infoY, infoW, WHITE)
+      local genderWidth = drawGenderGlyph(mon, infoX, infoY + 13,
+        detailFace, trueColorRegions)
+      drawText(Strings("LV%d", mon.level or 1), infoX + genderWidth,
+        infoY + 13, infoW - genderWidth, LIGHT)
+      local types = def.types or {}
+      local typeText = tostring(types[1] or "---")
+      if types[2] then typeText = typeText .. "/" .. tostring(types[2]) end
+      drawText(typeText, infoX, infoY + 26, infoW, LIGHT)
+      if mon.stats and mon.hp then
+        drawText(Strings("HP %d/%d", mon.hp, mon.stats.hp),
+          infoX, infoY + 39, infoW, WHITE)
+      end
+      drawText(location, infoX,
+        layout.detail.y + layout.detail.h - 14, infoW, LIGHT)
+      return
+    end
 
     if layout.compact then
       drawMonIcon(screen, mon, layout.detail.x + 6, layout.detail.y + 6,
@@ -1293,22 +1505,31 @@ return function(mod, genderExports, compatibility)
 
   local function drawFooter(screen, layout)
     gray(DARK)
-    love.graphics.rectangle("fill", 0, FOOTER_Y, layout.width, 8)
+    love.graphics.rectangle("fill", 0, layout.footerY, layout.width, 8)
     local message = screen.status
     if not message then
       if screen.held then
-        message = layout.compact and Strings("A PLACE  B CANCEL")
-          or Strings("A PLACE B CANCEL SEL BOXES")
+        message = (layout.compact or layout.portrait)
+          and Strings("A PLACE B CANCEL")
+          or Strings("A PLACE B CANCEL  DOWN PARTY")
       else
-        message = layout.compact and Strings("A MOVE SEL BOX")
-          or Strings("A MOVE START MENU SEL BOXES")
+        message = (layout.compact or layout.portrait)
+          and Strings("A MOVE SEL BOX")
+          or Strings("A MOVE  DOWN PARTY  EDGE BOX")
       end
     end
     if screen.boxSwitching then
-      message = layout.compact and Strings("ARROWS BOX A DONE")
-        or Strings("LEFT RIGHT BOX  A DONE")
+      if screen.boxPicker then
+        message = (layout.compact or layout.portrait)
+          and Strings("ARROWS A OPEN B BACK")
+          or Strings("ARROWS  A OPEN  B BACK")
+      else
+        message = (layout.compact or layout.portrait)
+          and Strings("LR BOX A ALL B BACK")
+          or Strings("LR BOX  A ALL  DOWN BACK")
+      end
     end
-    drawCentered(message, layout.width / 2, FOOTER_Y,
+    drawCentered(message, layout.width / 2, layout.footerY,
       layout.width - 8, WHITE)
   end
 
@@ -1316,7 +1537,8 @@ return function(mod, genderExports, compatibility)
     local rowH = 12
     local width = math.min(112, math.max(88, math.floor(layout.width * 0.42)))
     local height = #screen.actions * rowH + 6
-    local x, y = layout.width - width - 4, FOOTER_Y - height - 2
+    local x, y = layout.width - width - 4,
+      layout.footerY - height - 2
     return x, y, width, height, rowH
   end
 
@@ -1338,6 +1560,42 @@ return function(mod, genderExports, compatibility)
       if chosen then
         gray(WHITE)
         love.graphics.rectangle("fill", x + 6, rowY + 4, 3, 3)
+      end
+    end
+  end
+
+  local function drawBoxPicker(screen, layout)
+    if not screen.boxPicker then return end
+    panelFrame(layout.box, false)
+    local rows = math.ceil(Boxes.COUNT / BOX_PICKER_COLS)
+    local innerW, innerH = layout.box.w - 4, layout.box.h - 4
+    for index = 1, Boxes.COUNT do
+      local zero = index - 1
+      local column = zero % BOX_PICKER_COLS
+      local row = math.floor(zero / BOX_PICKER_COLS)
+      local x1 = layout.box.x + 2
+        + math.floor(column * innerW / BOX_PICKER_COLS)
+      local x2 = layout.box.x + 2
+        + math.floor((column + 1) * innerW / BOX_PICKER_COLS)
+      local y1 = layout.box.y + 2 + math.floor(row * innerH / rows)
+      local y2 = layout.box.y + 2 + math.floor((row + 1) * innerH / rows)
+      local rect = { x = x1, y = y1, w = x2 - x1, h = y2 - y1 }
+      local chosen = index == screen.boxPickerIndex
+      if chosen then
+        gray(BLACK)
+        chamfer("fill", rect.x, rect.y, rect.w, rect.h, 2)
+      else
+        gray(WHITE)
+        love.graphics.rectangle("fill", rect.x + 1, rect.y + 1,
+          rect.w - 2, rect.h - 2)
+      end
+      drawCentered(("%02d"):format(index), rect.x + rect.w / 2,
+        rect.y + math.floor((rect.h - 8) / 2), rect.w - 4,
+        chosen and WHITE or BLACK)
+      if index == screen.game.save.currentBox and not chosen then
+        gray(DARK)
+        love.graphics.rectangle("fill", rect.x + 3,
+          rect.y + rect.h - 4, math.max(2, rect.w - 6), 2)
       end
     end
   end
@@ -1392,12 +1650,18 @@ return function(mod, genderExports, compatibility)
     end
     drawDetails(self, layout, trueColorRegions)
     drawFooter(self, layout)
+    drawBoxPicker(self, layout)
     drawActions(self, layout)
 
     local modalCutout
     if self.actions then
       local x, y, width, height = actionGeometry(self, layout)
       modalCutout = { x = x, y = y, w = width + 2, h = height + 2 }
+    elseif self.boxPicker then
+      modalCutout = {
+        x = layout.box.x, y = layout.box.y,
+        w = layout.box.w + 2, h = layout.box.h + 2,
+      }
     end
     for _, rect in ipairs(trueColorRegions) do
       markTrueColorOutside(rect, modalCutout)
@@ -1413,7 +1677,8 @@ return function(mod, genderExports, compatibility)
       or PaletteFX.pal(data, "MEWMON")
     if not base then return nil end
     local zones = {
-      { colors = base, x = 0, y = 0, w = layout.width, h = SCREEN_H },
+      { colors = base, x = 0, y = 0,
+        w = layout.width, h = layout.canvasHeight or layout.height },
     }
     local header = PaletteFX.pal(data, "REDMON") or base
     local partyPal = PaletteFX.pal(data, "GREENMON") or base
@@ -1460,7 +1725,8 @@ return function(mod, genderExports, compatibility)
       colors = selectedPal, x = rect.x, y = rect.y, w = rect.w, h = rect.h,
     }
     zones[#zones + 1] = {
-      colors = header, x = 0, y = FOOTER_Y, w = layout.width, h = 8,
+      colors = header, x = 0, y = layout.footerY,
+      w = layout.width, h = 8,
     }
     if self.actions then
       local x, y, width, height = actionGeometry(self, layout)
@@ -1472,7 +1738,7 @@ return function(mod, genderExports, compatibility)
   end
 
   function PC:uiSize()
-    return responsiveWidth(), SCREEN_H
+    return responsiveSize()
   end
 
   function PC:isWideBattleLayout()
@@ -1518,6 +1784,8 @@ return function(mod, genderExports, compatibility)
         blink = 0,
         held = nil,
         boxSwitching = false,
+        boxPicker = false,
+        boxPickerIndex = game.save.currentBox,
         boxSwitchReturnRegion = nil,
         actions = nil,
         actionIndex = 1,
