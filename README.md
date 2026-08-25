@@ -8,22 +8,31 @@ format while adopting the direct manipulation used by newer Pokémon games.
 
 - the party and active PC box stay visible together
 - A picks up, places, reorders, or swaps a Pokémon
-- SELECT focuses the box header; LEFT/RIGHT browse boxes in either direction
-  without putting a carried Pokémon down
+- widescreen places details on the left, the active box above, and the whole
+  party in one row along the bottom
+- LEFT/RIGHT at a widescreen box edge browse adjacent boxes without putting a
+  carried Pokémon down; DOWN enters the party and UP returns to the box
+- SELECT focuses the box header; A opens a numbered list for jumping directly
+  to any box
 - START provides Summary, one-step transfer, Release, and companion actions
 - selected Pokémon show their battle-front artwork, name, level, type, HP,
   and current location
 - empty party and box positions remain visible
-- widescreen displays add a full detail rail and named party cards
-- compact 160×144 displays retain the same party-and-box workflow
+- widescreen displays add a full detail rail and horizontal party strip
+- genuinely small, short 160×144 surfaces use a compact 2×3 party grid and
+  bottom detail strip so icons and text remain legible
+- tall phone screens instead use their extra height: full-width box grid,
+  horizontal party row, then a large full-width information panel with the
+  selected Pokémon's battle artwork beside its details
 - primary-type colours match Modern Party UI's card palette
 
-The combined layout follows the strongest common pattern in Pokémon Sword and
-Shield, Scarlet and Violet, and Legends: Arceus: party on the left, active box
-as a central grid, selected-Pokémon details alongside it, and in-place box
-switching. The implementation stays intentionally Gen 1: all graphics come
-from the player's own game data and the interface is built from crisp pixels
-and four-shade palette ramps.
+The combined layout adapts the storage workflow from Pokémon Sword and Shield,
+Scarlet and Violet, and Legends: Arceus: an active box grid, a nearby party,
+selected-Pokémon details, and in-place box switching. On widescreen displays,
+the party runs beneath the box so vertical movement reaches it naturally while
+the grid's left and right edges browse boxes. The implementation stays
+intentionally Gen 1: all graphics come from the player's own game data and the
+interface is built from crisp pixels and four-shade palette ramps.
 
 Reference material:
 
@@ -39,15 +48,18 @@ Reference material:
 | Pick up or place Pokémon | A |
 | Cancel a carried Pokémon / close PC | B |
 | Focus box selector | SELECT, or Up from the box's top row |
-| Previous/next box | Left/Right while the box header is focused |
-| Return to the box grid | A, B, Down, or SELECT |
+| Previous/next box | Left/Right at a widescreen grid edge or while the header is focused |
+| Open all-box picker | A while the box header is focused |
+| Choose a box directly | D-pad then A in the all-box picker |
+| Return to the box grid | Down or SELECT from the header; B from the PC |
+| Move between box and party | Down from the bottom box row; Up from the party |
 | Summary, quick transfer, Release, companion actions | START |
 
-A carried Pokémon stays attached to the cursor while the highlighted box header
-moves backward or forward. This gives browsing and cross-box moves one visible,
-two-way control path rather than splitting NEXT and PREVIOUS across SELECT and
-START. START's **SEND TO BOX** and **ADD TO PARTY** actions provide an even
-faster one-step transfer when exact placement does not matter.
+A carried Pokémon stays attached to the cursor while browsing from either grid
+edge, the highlighted header, or the all-box picker. Sequential browsing and
+direct jumps therefore share one visible control path. START's **SEND TO BOX**
+and **ADD TO PARTY** actions provide an even faster one-step transfer when exact
+placement does not matter.
 
 The usual safety rules remain: the last party Pokémon cannot be deposited or
 released, a seventh party member cannot be withdrawn, and a 21st Pokémon cannot
@@ -80,11 +92,12 @@ The PC mirrors Modern Party UI's established companion list:
 - **Anytime Rename 1.2.1** and **Wilds of Kanto** can add callback-backed
   NICKNAME and FOLLOW utilities to a party Pokémon's START actions.
 - **DV Tracker**, **Kanto Ribbons**, **DramaticShape**, **Crystal 251**,
-  **Crystal Animated Sprites with Shiny Visuals**, **Pokémon Gold & Silver
+  **Crystal Animated Sprites with Shiny Visuals 1.x**, **Pokémon Gold & Silver
   Sprites**, **HGSS Visual Overhaul**, and **QoL Toggles** initialize before the
-  PC. Selecting SUMMARY
-  therefore opens their live compatible Summary controller and the responsive
-  presentation supplied by Modern Party UI when it is installed.
+  PC. Selecting SUMMARY therefore opens their live compatible Summary
+  controller and the responsive presentation supplied by Modern Party UI when
+  it is installed. Crystal 1.x's true-colour artwork and animation update
+  wrapper remain live through the PC-to-Summary handoff.
 
 A boxed Pokémon receives its derived stat block when it enters the party or
 opens Summary, matching the native engine. Pokémon Yellow's deposited-Pikachu

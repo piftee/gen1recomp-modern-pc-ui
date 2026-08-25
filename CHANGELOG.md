@@ -1,5 +1,80 @@
 # Changelog
 
+## [0.4.1] - 2026-08-25
+
+### Compatibility
+
+- Verified load ordering and the PC-to-Summary handoff with Crystal Animated
+  Sprites with Shiny Visuals 1.x. Its live true-colour sprite and animation
+  update wrapper remain installed when Summary is opened from storage.
+
+### Fixed
+
+- Capped the complete tall-phone PC surface at 256 native pixels, limiting the
+  full-width selected-Pokémon panel to roughly 110 pixels instead of allowing
+  it to absorb every extra pixel in extremely tall windows.
+- Taller portrait windows now letterbox the finished interface while retaining
+  the same integer pixel scale and touch-control clearance.
+
+## [0.4.0] - 2026-08-25
+
+### Added
+
+- Added a true tall-phone workspace that uses the available portrait canvas
+  instead of centring the 144px interface between black bars.
+- Portrait screens show the full-width box grid first, all six party slots in
+  one row beneath it, and a generous full-width Pokémon information panel at
+  the bottom with battle artwork on the left and details on the right.
+- Visible touch controls reserve a black control bed below the PC so they never
+  cover the selected-Pokémon panel or footer.
+
+### Changed
+
+- The 160×144 compact arrangement remains limited to genuinely short surfaces;
+  tall 160px-wide phone canvases now receive the portrait layout.
+
+## [0.3.3] - 2026-08-25
+
+### Changed
+
+- Restored the space-efficient 2×3 party, box grid, and bottom detail strip at
+  genuinely small 160px-wide and portrait-phone game surfaces.
+- Medium and desktop windows keep the details-left, box-above, party-bottom
+  arrangement introduced in 0.3.0.
+
+## [0.3.2] - 2026-08-25
+
+### Changed
+
+- Removed the alternate compact panel arrangement. Every window size now keeps
+  selected-Pokémon details on the left, the active box above, and all six party
+  slots in one row along the bottom.
+- Narrow windows use tighter panel widths and shorter labels without changing
+  navigation or moving the party away from the bottom.
+
+## [0.3.1] - 2026-08-25
+
+### Fixed
+
+- Enabled the redesigned details-left, party-bottom workspace at medium and
+  4:3 window widths. Only the true 160×144 view now uses the legacy compact
+  arrangement, so ordinary non-widescreen desktop windows no longer appear
+  unchanged after upgrading.
+
+## [0.3.0] - 2026-08-25
+
+### Changed
+
+- Rebuilt the widescreen workspace with selected-Pokémon details on the left,
+  the active box above, and all six party slots in one row along the bottom.
+- LEFT or RIGHT at a widescreen box-grid edge now opens the adjacent box while
+  preserving the cursor position and any carried Pokémon.
+- DOWN from the box's bottom row enters the nearest party slot; UP returns to
+  the nearest position on the box's bottom row.
+- A on the focused box header now opens a visible all-box picker for direct
+  jumps, while LEFT and RIGHT retain quick sequential browsing.
+- Compact mode keeps its established space-efficient panel arrangement.
+
 ## [0.2.3] - 2026-08-24
 
 ### Fixed

@@ -272,20 +272,66 @@ screen.region, screen.partyIndex = "party", 1
 press("select")
 press("right")
 press("a")
+T.check(screen.boxSwitching and screen.boxPicker,
+  "A on the focused header opens the direct all-box picker")
+local pickerStart = screen.boxPickerIndex
+press("right")
+T.eq(screen.boxPickerIndex, pickerStart + 1,
+  "the all-box picker moves directly between numbered boxes")
+press("a")
 T.check(not screen.boxSwitching and screen.region == "party",
-  "browsing boxes without a carry returns focus to the original party panel")
+  "opening a picked box returns focus to the original party panel")
 
--- Responsive and compact layouts both keep every panel on one native-pixel
--- surface and draw without a ROM-backed icon atlas in the SDK fixture.
+-- Every responsive width keeps the same panel order on one native-pixel
+-- surface and draws without a ROM-backed icon atlas in the SDK fixture.
 local graphics = love.graphics
 local realDimensions = graphics.getPixelDimensions
+graphics.getPixelDimensions = function() return 820, 600 end
+local mediumLayout = screen:modernPCLayoutInfo()
+T.check(mediumLayout.detail.x < mediumLayout.box.x
+    and mediumLayout.party.y > mediumLayout.box.y + mediumLayout.box.h,
+  "a medium 4:3 desktop window uses the redesigned PC workspace")
 graphics.getPixelDimensions = function() return 1280, 720 end
 local wideW, wideH = screen:uiSize()
 T.eq(wideW, 256, "a 16:9 window exposes a 256x144 PC workspace")
 T.eq(wideH, 144, "the responsive PC keeps the Game Boy screen height")
 local wideLayout = screen:modernPCLayoutInfo()
-T.check(not wideLayout.compact and wideLayout.detail.x > wideLayout.box.x,
-  "widescreen adds a dedicated detail rail to the right of the box")
+T.check(wideLayout.detail.x < wideLayout.box.x,
+  "widescreen places the dedicated detail rail left of the box")
+T.check(wideLayout.party.y > wideLayout.box.y + wideLayout.box.h
+    and wideLayout.party.cols == 6 and wideLayout.party.rows == 1,
+  "widescreen lays all six party slots in one row beneath the box")
+
+-- Widescreen grid edges browse boxes horizontally, while vertical movement
+-- crosses naturally between the box's bottom row and the party strip.
+screen.boxSwitching, screen.boxPicker = false, false
+screen.region, screen.boxIndex = "box", 20
+local edgeBox = save.currentBox
+press("right")
+T.eq(save.currentBox, edgeBox % Boxes.COUNT + 1,
+  "RIGHT at the box grid edge opens the next box")
+T.eq(screen.boxIndex, 20,
+  "edge browsing preserves the cursor's row and column")
+press("down")
+T.eq(screen.region, "party",
+  "DOWN from the bottom box row enters the party strip")
+local partyFromBox = screen.partyIndex
+press("up")
+T.check(screen.region == "box" and screen.boxIndex >= 16,
+  "UP from the party returns to the nearest bottom-row box slot")
+screen.boxIndex = 1
+press("up")
+press("a")
+T.check(screen.boxPicker and screen.boxPickerIndex == save.currentBox,
+  "A from the top selector starts the picker on the active box")
+press("b")
+T.check(screen.boxSwitching and not screen.boxPicker,
+  "B from the all-box picker returns to the focused selector")
+press("down")
+T.check(not screen.boxSwitching and screen.region == "box",
+  "DOWN from the selector returns to the box grid")
+
+screen.region, screen.partyIndex = "party", 1
 local warmPixels = {}
 for y = 0, 2 do
   warmPixels[y] = {}
@@ -330,15 +376,21 @@ local colorLayout = screen:modernPCLayoutInfo()
 local partyInnerW = colorLayout.party.w - 4
 local partyInnerH = colorLayout.party.h - 4
 local function partySlot(index)
-  local row = index - 1
+  local zero = index - 1
+  local column = zero % colorLayout.party.cols
+  local row = math.floor(zero / colorLayout.party.cols)
+  local x1 = colorLayout.party.x + 2
+    + math.floor(column * partyInnerW / colorLayout.party.cols)
+  local x2 = colorLayout.party.x + 2
+    + math.floor((column + 1) * partyInnerW / colorLayout.party.cols)
   local y1 = colorLayout.party.y + 2
     + math.floor(row * partyInnerH / colorLayout.party.rows)
   local y2 = colorLayout.party.y + 2
     + math.floor((row + 1) * partyInnerH / colorLayout.party.rows)
   return {
-    x = colorLayout.party.x + 2,
+    x = x1,
     y = y1,
-    w = partyInnerW,
+    w = x2 - x1,
     h = y2 - y1,
   }
 end
@@ -485,15 +537,35 @@ PaletteFX.markTrueColor = realMarkTrueColor
 Sprites.path = realSpritePath
 graphics.rectangle = realRectangle
 
+graphics.getPixelDimensions = function() return 480, 960 end
+local portraitW, portraitH = screen:uiSize()
+T.eq(portraitW, 160, "a portrait phone keeps a readable 160px UI width")
+T.eq(portraitH, 256, "a portrait phone caps its tall UI surface")
+local portrait = screen:modernPCLayoutInfo()
+T.check(portrait.portrait
+    and portrait.box.y < portrait.party.y
+    and portrait.party.y < portrait.detail.y,
+  "portrait orders the box, party row, and full-width details vertically")
+T.check(portrait.box.w == portrait.width - 4
+    and portrait.party.cols == 6
+    and portrait.detail.w == portrait.width - 4
+    and portrait.detail.h > 80 and portrait.detail.h <= 112,
+  "portrait keeps a generous full-width preview without unbounded growth")
+local portraitOK, portraitErr = pcall(screen.draw, screen)
+T.check(portraitOK,
+  "the tall portrait PC draws headlessly: " .. tostring(portraitErr))
+
 graphics.getPixelDimensions = function() return 640, 576 end
-local compact = screen:modernPCLayoutInfo()
-T.check(compact.compact and compact.detail.y > compact.box.y + compact.box.h,
-  "160px mode places a compact detail strip below party and box")
-local compactOK, compactErr = pcall(screen.draw, screen)
-T.check(compactOK, "the compact PC draws headlessly: " .. tostring(compactErr))
+local narrow = screen:modernPCLayoutInfo()
+T.check(narrow.compact and narrow.party.cols == 2
+    and narrow.party.rows == 3
+    and narrow.detail.y > narrow.box.y + narrow.box.h,
+  "160px mode restores the legible compact party and detail arrangement")
+local narrowOK, narrowErr = pcall(screen.draw, screen)
+T.check(narrowOK, "the narrow PC draws headlessly: " .. tostring(narrowErr))
 local zones = screen:sgbPalettes(game) or {}
 T.check(#zones >= 7, "the PC emits base, panel, Pokémon, focus, and footer colours")
-T.eq(zones[1].w, 160, "palette coverage follows the compact UI width")
+T.eq(zones[1].w, 160, "palette coverage follows the narrow UI width")
 graphics.getPixelDimensions = realDimensions
 
 T.check(screen:isWideBattleLayout(),
@@ -515,10 +587,11 @@ local compatRun = T.sdk.loadMods({
   "mods/modern_party_ui/tests/fixtures/gender_mod",
   "mods/modern_party_ui/tests/fixtures/gen1_modern_ui",
   "mods/modern_party_ui/tests/fixtures/anytime_rename",
+  "mods/modern_party_ui/tests/fixtures/crystal_sprites",
   "mods/modern_pc_ui",
 }, { data = compatData, dev = true })
 T.eq(#compatRun.errors, 0,
-  "loads beside Gender Mod, Gen1 Modern UI, and Anytime Rename")
+  "loads beside Gender Mod, Gen1 Modern UI, Anytime Rename, and Crystal 1.x")
 
 local compatStack = { states = {} }
 function compatStack:push(state) self.states[#self.states + 1] = state end
@@ -562,7 +635,10 @@ T.check(genderOK,
 local sawGender, sawStrippedName, sawGenderMark = false, false, false
 for _, call in ipairs(compatGlyphs) do
   if call.text == "♂" then sawGender = true end
-  if call.text == "NIDORAN" then sawStrippedName = true end
+  if tostring(call.text):find("NID", 1, true)
+      and not tostring(call.text):find("♂", 1, true) then
+    sawStrippedName = true
+  end
 end
 for _, rect in ipairs(compatMarks) do
   if rect.w == 8 and rect.h == 8 then sawGenderMark = true break end
@@ -572,6 +648,29 @@ T.check(sawStrippedName,
   "the exported gender marker replaces the nickname's baked-in suffix")
 T.check(sawGenderMark,
   "Gender Mod's colour marker is protected from the PC palette")
+
+-- Crystal Animated Sprites 1.x installs its live Summary constructor and
+-- update wrapper before the PC. Opening Summary from storage must keep both
+-- pieces of that controller rather than replacing them with a PC-owned copy.
+compatInput.pressed.start = true
+compatScreen:update(0)
+compatInput.pressed.start = nil
+compatScreen.actionIndex = 1
+compatInput.pressed.a = true
+compatScreen:update(0)
+compatInput.pressed.a = nil
+local crystalSummary = compatStack:top()
+T.check(crystalSummary ~= compatScreen
+    and crystalSummary.crystalAnimatedSprite == true
+    and crystalSummary.spriteTrueColor == true,
+  "PC Summary retains Crystal Animated Sprites 1.x live true-colour artwork")
+if crystalSummary and crystalSummary ~= compatScreen
+    and type(crystalSummary.update) == "function" then
+  crystalSummary:update(0)
+end
+T.eq(crystalSummary and crystalSummary.crystalUpdateCalls, 1,
+  "PC Summary retains Crystal Animated Sprites 1.x animation update wrapper")
+if compatStack:top() ~= compatScreen then compatStack:pop() end
 
 compatInput.pressed.start = true
 compatScreen:update(0)
@@ -709,9 +808,10 @@ local firstParty = wideLayout.party
 local innerW, innerH = firstParty.w - 4, firstParty.h - 4
 local rectX = firstParty.x + 2
 local rectY = firstParty.y + 2
+local rectW = math.floor(innerW / firstParty.cols)
 local rectH = math.floor(innerH / firstParty.rows)
-local iconX = rectX + 2
-local iconY = rectY + math.max(0, math.floor((rectH - 16) / 2))
+local iconX = rectX + math.floor((rectW - 16) / 2)
+local iconY = rectY + math.floor((rectH - 16) / 2)
 local firstDraw = fittedDraws[1]
 local firstW = firstDraw.quad.w * firstDraw.sx
 local firstH = firstDraw.quad.h * firstDraw.sy
