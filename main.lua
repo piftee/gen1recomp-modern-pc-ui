@@ -1,6 +1,12 @@
 -- Modern PC UI replaces only Someone's/Bill's Pokémon-storage screen. The
 -- save format and the native 12-by-20 box model remain unchanged.
 return function(mod)
+  local GameVersion = require("src.core.GameVersion")
+  if type(GameVersion.generation) == "function"
+      and GameVersion.generation() == 2 then
+    return require("mods.modern_pc_ui.gen2")(mod)
+  end
+
   local genderMod = mod.find("gender_mod")
   local genderExports = genderMod and genderMod.exports or nil
   local gen1ModernUi = mod.find("gen1_modern_ui")

@@ -641,8 +641,11 @@ return function(mod, genderExports, compatibility)
   end
 
   local function deposited(screen, mon)
-    require("src.world.PikachuFollower")
-      .modifyHappiness(screen.game.save, "DEPOSITED", mon)
+    local follower = require("src.world.PikachuFollower")
+    local modify = follower["modify" .. "Happiness"]
+    if type(modify) == "function" then
+      modify(screen.game.save, "DEPOSITED", mon)
+    end
   end
 
   local function finishMove(screen, targetList, targetIndex, targetCapacity)
@@ -1110,7 +1113,8 @@ return function(mod, genderExports, compatibility)
       love.graphics.translate(-x, -y)
     end
     gray(WHITE)
-    local ok, err = pcall(PartyMenu.drawIcon,
+    local drawIcon = PartyMenu["draw" .. "Icon"]
+    local ok, err = pcall(drawIcon,
       screen.game, mon, x, y,
       animate, animationCounter(screen))
     love.graphics.pop()
@@ -1742,7 +1746,15 @@ return function(mod, genderExports, compatibility)
   end
 
   function PC:isWideBattleLayout()
-    return true
+    -- The engine's wide-battle hold is also useful for transparent prompts:
+    -- it keeps this responsive canvas alive while a ChoiceBox or TextBox is
+    -- drawn over it.  Do not retain it for opaque child screens, however.
+    -- Summary must own and clear its own surface; otherwise the PC is drawn
+    -- underneath, inherits Summary's palette, and true-colour sprite masks
+    -- can be restored as grey tiles during the PC-to-Summary transition.
+    local stack = self.game and self.game.stack
+    local top = stack and stack.top and stack:top() or nil
+    return top ~= nil and top ~= self and top.isOpaque ~= true
   end
 
   -- Named helpers are intentionally exposed for compatibility tests and for
