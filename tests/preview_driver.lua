@@ -71,6 +71,15 @@ return function(game)
   U.shot(game, DIR .. "/modern_pc_actions.png")
   screen.actions = nil
 
+  -- Summary is an opaque child screen, so it must replace the responsive PC
+  -- canvas rather than recolouring or restoring PC tiles underneath it.
+  U.tap(game, "start")
+  screen.actionIndex = 1
+  U.tap(game, "a")
+  U.wait(12)
+  U.shot(game, DIR .. "/modern_pc_summary_wide.png")
+  while game.stack:top() ~= screen do game.stack:pop() end
+
   -- Carry a Pokémon while using the visible two-way box selector.
   screen.region, screen.boxIndex = "box", 1
   screen:modernPCPickOrDrop()
@@ -116,6 +125,12 @@ return function(game)
   })
   U.wait(12)
   U.shot(game, DIR .. "/modern_pc_phone_portrait.png")
+  U.tap(game, "start")
+  screen.actionIndex = 1
+  U.tap(game, "a")
+  U.wait(12)
+  U.shot(game, DIR .. "/modern_pc_summary_portrait.png")
+  while game.stack:top() ~= screen do game.stack:pop() end
 
   -- Classic 160x144 uses the same compact arrangement as portrait phones.
   love.window.setMode(640, 576, {

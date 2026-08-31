@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.2] - 2026-08-31
+
+### Fixed
+
+- Stop retaining the PC workspace beneath opaque Summary screens. Opening a
+  Pokémon from storage now shows only Modern Party UI's summary portrait,
+  preventing the underlying PC portrait from appearing with a different
+  orientation or inherited palette while transparent prompts still retain the
+  PC as intended.
+
 ## [0.4.1] - 2026-08-25
 
 ### Compatibility

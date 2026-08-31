@@ -4,6 +4,10 @@ Modern PC UI turns Someone's PC into one party-and-box workspace. It keeps
 Pokémon Red's pixel font, menu icons, palettes, cries, box capacity, and save
 format while adopting the direct manipulation used by newer Pokémon games.
 
+On Gold, Silver, and Crystal the mod keeps Bill's native fourteen-box storage
+controller and adds a generation-aware workspace treatment to its list and
+preview panels.
+
 ## What changes
 
 - the party and active PC box stay visible together

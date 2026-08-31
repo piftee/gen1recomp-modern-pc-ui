@@ -101,7 +101,7 @@ T.check(screen.modernPCUI == true, "the modern PC presentation is active")
 T.eq(screen.modernPCLayout, "party-and-box",
   "the combined workspace identifies its layout")
 T.check(screen.holdsUIAnchors == true,
-  "native Summary and confirmation overlays stay attached to the PC surface")
+  "confirmation overlays stay attached to the PC surface")
 T.eq(screen.region, "box", "the cursor starts in the active box")
 
 local function press(key)
@@ -568,8 +568,16 @@ T.check(#zones >= 7, "the PC emits base, panel, Pokémon, focus, and footer colo
 T.eq(zones[1].w, 160, "palette coverage follows the narrow UI width")
 graphics.getPixelDimensions = realDimensions
 
+T.check(not screen:isWideBattleLayout(),
+  "the PC uses its own responsive canvas when it is the top screen")
+stack:push({ isOpaque = false })
 T.check(screen:isWideBattleLayout(),
-  "the PC owns its responsive canvas while native overlays are visible")
+  "the PC holds its responsive canvas beneath a transparent prompt")
+stack:pop()
+stack:push({ isOpaque = true })
+T.check(not screen:isWideBattleLayout(),
+  "an opaque child screen takes full ownership of the render surface")
+stack:pop()
 
 run.release()
 PaletteFX.setMode(previousMode)
@@ -664,6 +672,8 @@ T.check(crystalSummary ~= compatScreen
     and crystalSummary.crystalAnimatedSprite == true
     and crystalSummary.spriteTrueColor == true,
   "PC Summary retains Crystal Animated Sprites 1.x live true-colour artwork")
+T.check(not compatScreen:isWideBattleLayout(),
+  "Crystal 1.x Summary owns and clears its surface above the PC")
 if crystalSummary and crystalSummary ~= compatScreen
     and type(crystalSummary.update) == "function" then
   crystalSummary:update(0)
