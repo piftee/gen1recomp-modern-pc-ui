@@ -1,5 +1,8 @@
 # Modern PC UI
 
+> [!IMPORTANT]
+> **This standalone mod has been superseded by [Modern UI Suite](https://github.com/piftee/gen1recomp-modern-ui-suite).** It remains available for existing installs, but future fixes and features will be maintained in the suite. Disable this standalone mod before enabling the suite; the suite imports its saved settings automatically.
+
 Modern PC UI turns Someone's PC into one party-and-box workspace. It keeps
 Pokémon Red's pixel font, menu icons, palettes, cries, box capacity, and save
 format while adopting the direct manipulation used by newer Pokémon games.
