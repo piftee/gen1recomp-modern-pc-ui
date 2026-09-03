@@ -1,7 +1,7 @@
 {
   "id": "modern_pc_ui",
   "name": "Modern PC UI",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "github": "piftee/gen1recomp-modern-pc-ui",
   "api": 2,
   "games": ["gen1", "gen2"],
@@ -14,6 +14,7 @@
   "optional_dependencies": [
     "modern_bag_ui",
     "modern_party_ui",
+    "kanto_gear",
     "gender_mod",
     "dv_tracker",
     "kanto_ribbons",

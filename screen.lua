@@ -21,6 +21,18 @@ return function(mod, genderExports, compatibility)
   local Theme = require("src.ui.Theme")
   local TouchControls = require("src.core.TouchControls")
 
+  -- Newer hosts let companion-display mods reserve only part of the window
+  -- for the game. Keep the require optional so the PC remains usable on the
+  -- older dev builds covered by the manifest's compatibility range.
+  local GameViewport
+  do
+    local ok, viewport = pcall(require, "src.render.GameViewport")
+    if ok and type(viewport) == "table"
+        and type(viewport.pixelDimensions) == "function" then
+      GameViewport = viewport
+    end
+  end
+
   local SCREEN_H = 144
   local HEADER_H = 16
   local FOOTER_Y = 136
@@ -193,9 +205,15 @@ return function(mod, genderExports, compatibility)
 
   local function displayPixels()
     local width, height
-    if love.graphics.getPixelDimensions then
+    if GameViewport then
+      local ok, viewportWidth, viewportHeight =
+        pcall(GameViewport.pixelDimensions)
+      if ok then width, height = viewportWidth, viewportHeight end
+    end
+    if not (tonumber(width) and tonumber(height))
+        and love.graphics.getPixelDimensions then
       width, height = love.graphics.getPixelDimensions()
-    else
+    elseif not (tonumber(width) and tonumber(height)) then
       width, height = love.graphics.getDimensions()
     end
     return tonumber(width) or 160, tonumber(height) or SCREEN_H

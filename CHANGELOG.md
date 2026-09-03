@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.3] - 2026-09-03
+
+### Compatibility
+
+- Modern PC UI now sizes itself from the game viewport reserved by Kanto Gear
+  3.x combined-display layouts. On landscape and other unusual aspect ratios,
+  the PC uses the available game panel instead of creating an extra-wide
+  canvas that Kanto Gear then shrinks to an unreadable size. Portrait, overlay,
+  separate-screen, and older-engine layouts retain their existing sizing.
+
 ## [0.4.2] - 2026-08-31
 
 ### Fixed

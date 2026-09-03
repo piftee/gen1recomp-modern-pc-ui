@@ -112,6 +112,12 @@ Modern Bag UI and Modern Party UI are optional companions. Together the three
 mods use the same diagonal pixel backdrop, chamfered focus cards, responsive
 width, and type-colour language.
 
+Kanto Gear 3.x combined-display layouts are also supported. Modern PC UI sizes
+itself from the game viewport Kanto Gear leaves available, so a side-by-side
+landscape layout stays readable instead of fitting an extra-wide PC canvas
+inside the narrower game panel. Portrait, overlay, and separate-screen layouts
+retain their existing behaviour.
+
 ## Development
 
 From the Gen1Recomp repository root:

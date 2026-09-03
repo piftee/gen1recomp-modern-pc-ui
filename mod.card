@@ -24,6 +24,7 @@ return {
       "Battle-selected front artwork in the wide details rail",
       "Gender Mod markers and a Gen1 Modern UI source-screen bridge",
       "Callback-backed NICKNAME and FOLLOW actions from companion mods",
+      "Viewport-aware sizing beside Kanto Gear's combined display",
     },
     known = {
       "Uses the engine_internals permission to preserve native saves, summaries, cries, and Pikachu happiness",

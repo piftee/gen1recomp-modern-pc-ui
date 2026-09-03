@@ -2,4 +2,5 @@
 .github/
 tests/modern_pc_ui_test.lua
 tests/preview_driver.lua
+tests/kanto_gear_preview_driver.lua
 Modern-PC-UI-*.zip
