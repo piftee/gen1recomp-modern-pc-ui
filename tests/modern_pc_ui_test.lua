@@ -10,6 +10,28 @@ local PartyMenu = require("src.ui.PartyMenu")
 local Pokemon = require("src.pokemon.Pokemon")
 local Sprites = require("src.pokemon.Sprites")
 
+-- The checked-out legacy host predates GameViewport. Supply its current
+-- public sizing contract so this suite can exercise companion layouts while
+-- production still falls back cleanly when the module truly is unavailable.
+local viewportPixels = {}
+local viewportModule = "src.render.GameViewport"
+local previousViewportLoaded = package.loaded[viewportModule]
+local previousViewportPreload = package.preload[viewportModule]
+package.loaded[viewportModule] = nil
+package.preload[viewportModule] = function()
+  return {
+    pixelDimensions = function()
+      if viewportPixels.width and viewportPixels.height then
+        return viewportPixels.width, viewportPixels.height
+      end
+      if love.graphics.getPixelDimensions then
+        return love.graphics.getPixelDimensions()
+      end
+      return love.graphics.getDimensions()
+    end,
+  }
+end
+
 local data = T.fixtures.fresh()
 data.icons = {
   icons = {}, byDex = {},
@@ -566,6 +588,21 @@ T.check(narrowOK, "the narrow PC draws headlessly: " .. tostring(narrowErr))
 local zones = screen:sgbPalettes(game) or {}
 T.check(#zones >= 7, "the PC emits base, panel, Pokémon, focus, and footer colours")
 T.eq(zones[1].w, 160, "palette coverage follows the narrow UI width")
+
+-- Kanto Gear's side-by-side landscape compositor assigns the game a narrower
+-- viewport than the physical phone window. The PC must derive its native
+-- width from that panel or an ultra-wide canvas is shrunk a second time.
+graphics.getPixelDimensions = function() return 2400, 1080 end
+viewportPixels.width, viewportPixels.height = 1580, 1080
+local companionW, companionH = screen:uiSize()
+T.eq(companionW, 225,
+  "Kanto Gear landscape sizing follows the allocated game viewport")
+T.eq(companionH, 144,
+  "Kanto Gear landscape keeps the PC's standard canvas height")
+viewportPixels.width, viewportPixels.height = nil, nil
+local fullWindowW = screen:uiSize()
+T.eq(fullWindowW, 342,
+  "without a reserved viewport the same display keeps its full wide layout")
 graphics.getPixelDimensions = realDimensions
 
 T.check(not screen:isWideBattleLayout(),
@@ -707,6 +744,8 @@ T.check(uiExports.shouldSuppress(compatScreen) == false,
 
 compatRun.release()
 PaletteFX.setMode(previousMode)
+package.loaded[viewportModule] = previousViewportLoaded
+package.preload[viewportModule] = previousViewportPreload
 
 -- HGSS Visual Overhaul replaces the native 16x16 menu contract with padded
 -- 32x32 true-colour frames. Use controlled alpha bounds to prove that the PC

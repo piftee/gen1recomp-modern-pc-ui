@@ -93,6 +93,7 @@ return function(mod)
 
   local known = {
     { "gender_mod", "Gender Mod" },
+    { "kanto_gear", "Kanto Gear" },
     { "dv_tracker", "DV Tracker" },
     { "kanto_ribbons", "Kanto Ribbons" },
     { "gen1_modern_ui", "Gen1 Modern UI" },
