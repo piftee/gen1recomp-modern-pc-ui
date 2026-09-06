@@ -3,4 +3,11 @@
 tests/modern_pc_ui_test.lua
 tests/preview_driver.lua
 tests/kanto_gear_preview_driver.lua
+tests/batch_test.lua
+tests/qol_navigation_test.lua
+tests/gen2_qol_driver.lua
+tests/gen2_workspace_driver.lua
 Modern-PC-UI-*.zip
+
+tests/gen2_catch_storage_test.lua
+tests/gen2_catch_storage_driver.lua

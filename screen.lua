@@ -3,8 +3,13 @@
 -- this screen is only a controller and presentation layer over those lists.
 return function(mod, genderExports, compatibility)
   compatibility = compatibility or {}
+  -- Gen 2 shares the workspace navigation/layout, but owns storage mutation,
+  -- Mail, native child screens and its direct-colour renderer.
+  local storage = compatibility.storage
+  local batchSource = assert(mod:read("batch.lua"))
+  local Batch = assert(load(batchSource, "@" .. mod.path .. "/batch.lua"))()
   local Assets = require("src.render.Assets")
-  local Boxes = require("src.pokemon.Boxes")
+  local Boxes = storage and storage.Boxes or require("src.pokemon.Boxes")
   local Font = require("src.render.Font")
   local Logger = require("src.core.Logger")
   local PaletteFX = require("src.render.PaletteFX")
@@ -256,9 +261,11 @@ return function(mod, genderExports, compatibility)
   end
 
   local function layoutFor(screen)
-    local width, height = responsiveSize()
+    local width, height
+    if storage then width, height = storage.size(screen)
+    else width, height = responsiveSize() end
     local renderer = screen and screen.game and screen.game.renderer
-    if renderer and renderer.uiSize then
+    if not storage and renderer and renderer.uiSize then
       local rendererW, rendererH = renderer:uiSize()
       width, height = rendererW or width, rendererH or height
     end
@@ -492,6 +499,7 @@ return function(mod, genderExports, compatibility)
   end
 
   local function play(screen, id)
+    if storage then return storage.play(screen, id) end
     if screen.game and screen.game.data then Sound.play(screen.game.data, id) end
   end
 
@@ -584,6 +592,42 @@ return function(mod, genderExports, compatibility)
     local zero = index - 1
     local column, row = zero % panel.cols, math.floor(zero / panel.cols)
 
+    local exclusive = mod.options:get("box_exclusive") == true
+    local horizontal = direction == "left" or direction == "right"
+    if screen.region == "party" and horizontal and (not layout.compact or exclusive) then
+      local count = (screen.held or screen.multiMode) and Party.MAX
+        or math.max(1, #screen.game.save.party)
+      setCurrentIndex(screen, ((math.min(index, count) - 1
+        + (direction == "left" and -1 or 1)) % count) + 1)
+      return
+    end
+    if exclusive then
+      if horizontal then
+        local nextCol = (column + (direction == "left" and -1 or 1)) % panel.cols
+        setCurrentIndex(screen, row * panel.cols + nextCol + 1)
+      elseif direction == "up" and row > 0 then
+        setCurrentIndex(screen, index - panel.cols)
+      elseif direction == "down" and row < panel.rows - 1 then
+        setCurrentIndex(screen, index + panel.cols)
+      else
+        local other = screen.region == "box" and "party" or "box"
+        local otherPanel = layout[other]
+        local targetRow = direction == "up" and otherPanel.rows - 1 or 0
+        local nextIndex
+        if layout.compact then
+          local nextCol = math.floor(column * (otherPanel.cols - 1)
+            / math.max(1, panel.cols - 1) + 0.5)
+          nextIndex = targetRow * otherPanel.cols + nextCol + 1
+        else
+          local rect = slotRect(layout, screen.region, index)
+          nextIndex = nearestIndexByX(layout, other, rect.x + rect.w / 2, targetRow)
+        end
+        screen.region = other
+        setCurrentIndex(screen, nextIndex)
+      end
+      return
+    end
+
     if layout.compact then
       if direction == "left" then
         if column > 0 then
@@ -667,6 +711,9 @@ return function(mod, genderExports, compatibility)
   end
 
   local function finishMove(screen, targetList, targetIndex, targetCapacity)
+    if storage then
+      return storage.finishMove(screen, targetList, targetIndex, targetCapacity)
+    end
     local held = screen.held
     if not held or held.sourceList[held.sourceIndex] ~= held.mon then
       screen.held = nil
@@ -724,8 +771,84 @@ return function(mod, genderExports, compatibility)
     return true
   end
 
+  local function clearMulti(screen)
+    screen.multi, screen.multiMode, screen.multiSide = nil, nil, nil
+  end
+
+  function PC:modernPCMultiMarked(list, index)
+    for _, mark in ipairs(self.multi or {}) do
+      if mark.sourceList == list and mark.sourceIndex == index
+          and mark.mon == list[index] then return true end
+    end
+    return false
+  end
+
+  local function toggleMultiMark(screen)
+    local mon, list, index = selected(screen)
+    if not mon then screen.status = Strings("That slot is empty."); return false end
+    if screen.multiSide and screen.multiSide ~= screen.region then return false end
+    screen.multi = screen.multi or {}
+    for i, mark in ipairs(screen.multi) do
+      if mark.sourceList == list and mark.mon == mon then
+        table.remove(screen.multi, i)
+        if #screen.multi == 0 then screen.multiSide = nil end
+        screen.status = Strings("%d marked. A mark, B cancel.", #screen.multi)
+        return true
+      end
+    end
+    screen.multiSide = screen.region
+    screen.multi[#screen.multi + 1] = { mon = mon, sourceList = list,
+      sourceIndex = index, sourceRegion = screen.region,
+      sourceBox = screen.game.save.currentBox }
+    screen.status = Strings("%d marked. A mark, B cancel.", #screen.multi)
+    play(screen, "Press_AB")
+    return true
+  end
+
+  local function finishMultiMove(screen, target, at, capacity)
+    local plan, why = Batch.plan(screen.game.save, screen.multi, target, at, capacity)
+    if not plan then screen.status = Strings(why); return false end
+    local ok
+    if storage then ok, why = storage.finishBatch(screen, plan, Batch)
+    else
+      ok, why = Batch.commit(screen.game.save, plan, function()
+        for _, mon in ipairs(plan.incoming) do ensurePartyMon(screen, mon) end
+        if #plan.incoming > 0 or #plan.outgoing > 0 then
+          local usable = false
+          for _, mon in ipairs(screen.game.save.party) do
+            if not mon.isEgg and (mon.hp or 0) > 0 then usable = true end
+          end
+          if not usable then error("Keep a usable POKéMON in your party!", 0) end
+        end
+        for _, mon in ipairs(plan.outgoing) do deposited(screen, mon) end
+      end)
+      if not ok and why ~= "Keep a usable POKéMON in your party!" then
+        mod.log:error("PC batch rolled back: %s", tostring(why))
+        why = "Could not move group. Nothing changed."
+      end
+      if ok then screen.modernPCBatchDirty = true end
+    end
+    if not ok then
+      screen.status = Strings(why or "Could not move group. Nothing changed.")
+      return false
+    end
+    clearMulti(screen)
+    screen.region = target == screen.game.save.party and "party" or "box"
+    setCurrentIndex(screen, plan.at)
+    screen.status = Strings("Moved %d POKéMON.", plan.count)
+    play(screen, "Swap")
+    return true
+  end
+
   local function pickOrDrop(screen)
     local mon, list, index = selected(screen)
+    if screen.multiMode then
+      if mon and (not screen.multiSide or screen.multiSide == screen.region) then
+        return toggleMultiMark(screen)
+      end
+      local _, capacity = listFor(screen, screen.region)
+      return finishMultiMove(screen, list, index, capacity)
+    end
     if screen.held then
       local _, capacity = listFor(screen, screen.region)
       return finishMove(screen, list, index, capacity)
@@ -750,7 +873,8 @@ return function(mod, genderExports, compatibility)
     if screen.game.save.currentBox == index then return false end
     screen.game.save.currentBox = index
     screen.status = Strings("Opened BOX %02d.", screen.game.save.currentBox)
-    if screen.game.writeSave then screen.game:writeSave() end
+    if storage then storage.changed(screen)
+    elseif screen.game.writeSave then screen.game:writeSave() end
     play(screen, "Swap")
     return true
   end
@@ -762,6 +886,7 @@ return function(mod, genderExports, compatibility)
   end
 
   local function quickTransfer(screen)
+    if storage then return storage.quickTransfer(screen) end
     local mon, source, index = selected(screen)
     if not mon then
       screen.status = Strings("That slot is empty.")
@@ -799,6 +924,7 @@ return function(mod, genderExports, compatibility)
   end
 
   local function requestRelease(screen)
+    if storage then return storage.requestRelease(screen) end
     local mon, list, index = selected(screen)
     if not mon then
       screen.status = Strings("That slot is empty.")
@@ -830,6 +956,19 @@ return function(mod, genderExports, compatibility)
   end
 
   local function actionItems(screen)
+    if screen.multiMode then
+      local items = { { label = Strings("STOP MULTI SELECT"), action = "multi" } }
+      if screen.multiSide == "box" and #screen.multi == Party.MAX then
+        items[#items + 1] = { label = Strings("SWAP WHOLE PARTY"), action = "multi_party" }
+      end
+      items[#items + 1] = { label = Strings("CANCEL"), action = "cancel" }
+      return items
+    end
+    if storage then
+      local items = storage.actionItems(screen)
+      table.insert(items, #items, { label = Strings("MULTIPLE SELECTIONS"), action = "multi" })
+      return items
+    end
     local mon = selected(screen)
     local items = {}
     if mon then
@@ -863,12 +1002,34 @@ return function(mod, genderExports, compatibility)
         end
       end
     end
+    if mon then
+      items[#items + 1] = { label = Strings("MULTIPLE SELECTIONS"), action = "multi" }
+    end
     items[#items + 1] = { label = Strings("CANCEL"), action = "cancel" }
     return items
   end
 
   local function runAction(screen, entry)
     if not entry then return end
+    if entry.action == "multi" then
+      screen.actions = nil
+      if screen.multiMode then
+        clearMulti(screen)
+        screen.status = Strings("Multi select cancelled.")
+      else
+        screen.multiMode, screen.multi = true, {}
+        if selected(screen) then toggleMultiMark(screen)
+        else screen.status = Strings("A mark. Empty slot places group.") end
+      end
+      return
+    elseif entry.action == "multi_party" then
+      screen.actions = nil
+      return finishMultiMove(screen, screen.game.save.party, 1, Party.MAX)
+    end
+    if storage then
+      screen.actions = nil
+      return storage.runAction(screen, entry)
+    end
     local action = entry.action
     screen.actions = nil
     if not action and type(entry.onSelect) == "function" then
@@ -946,6 +1107,7 @@ return function(mod, genderExports, compatibility)
 
   function PC:update(_dt)
     self.blink = ((self.blink or 0) + 1) % 320
+    if storage and storage.update and storage.update(self, _dt) then return end
     local input = self.game.input
     if self.actions then
       updateActions(self)
@@ -970,8 +1132,22 @@ return function(mod, genderExports, compatibility)
       if self.held then
         self.held = nil
         self.status = Strings("Move cancelled.")
+      elseif self.multiMode then
+        clearMulti(self)
+        self.status = Strings("Multi select cancelled.")
       else
-        self.game.stack:pop()
+        if storage then storage.close(self)
+        else
+          if self.modernPCBatchDirty and self.game.writeSave then
+            local ok, saved = pcall(self.game.writeSave, self.game)
+            if not ok or saved == false then
+              self.status = Strings("Could not save. Close PC to retry.")
+              return
+            end
+            self.modernPCBatchDirty = nil
+          end
+          self.game.stack:pop()
+        end
       end
       play(self, "Press_AB")
     elseif input:wasPressed("select") then
@@ -1408,6 +1584,13 @@ return function(mod, genderExports, compatibility)
         rect.x + 3, rect.y + rect.h - 4)
     end
     if chosen and screen.held then drawGrip(rect) end
+    if screen:modernPCMultiMarked(list, index) then
+      gray(BLACK)
+      love.graphics.rectangle("fill", rect.x + 1, rect.y + 1, 7, 7)
+      gray(WHITE)
+      love.graphics.line(rect.x + 2, rect.y + 4, rect.x + 4, rect.y + 6,
+        rect.x + 7, rect.y + 2)
+    end
   end
 
   local function drawDetails(screen, layout, trueColorRegions)
@@ -1530,7 +1713,9 @@ return function(mod, genderExports, compatibility)
     love.graphics.rectangle("fill", 0, layout.footerY, layout.width, 8)
     local message = screen.status
     if not message then
-      if screen.held then
+      if screen.multiMode then
+        message = Strings("%d MARKED A MARK/PLACE B END", #(screen.multi or {}))
+      elseif screen.held then
         message = (layout.compact or layout.portrait)
           and Strings("A PLACE B CANCEL")
           or Strings("A PLACE B CANCEL  DOWN PARTY")
@@ -1656,6 +1841,7 @@ return function(mod, genderExports, compatibility)
 
   function PC:draw()
     local layout = layoutFor(self)
+    if storage then return storage.draw(self, layout, slotRect) end
     local trueColorRegions = {}
     drawBackdrop(layout)
     drawHeader(self, layout)

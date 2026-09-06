@@ -1,6 +1,10 @@
 -- Modern PC UI replaces only Someone's/Bill's Pokémon-storage screen. The
 -- save format and the native 12-by-20 box model remain unchanged.
 return function(mod)
+  mod.options:define({
+    { key = "box_exclusive", label = "BOX EXCLUSIVE",
+      type = "toggle", default = false },
+  })
   local GameVersion = require("src.core.GameVersion")
   if type(GameVersion.generation) == "function"
       and GameVersion.generation() == 2 then

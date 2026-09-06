@@ -253,7 +253,7 @@ press("start")
 local labels = {}
 for _, entry in ipairs(screen.actions or {}) do labels[#labels + 1] = entry.label end
 T.eq(table.concat(labels, "|"),
-  "SUMMARY|SEND TO BOX|RELEASE|CANCEL",
+  "SUMMARY|SEND TO BOX|RELEASE|MULTIPLE SELECTIONS|CANCEL",
   "START keeps only actions for the selected Pokémon")
 press("b")
 T.eq(screen.actions, nil, "B closes the action card")
