@@ -1,5 +1,75 @@
 # Changelog
 
+## [0.6.3] - 2026-09-05
+
+- Preserve Crystal Animated Sprites with Shiny Visuals normal/shiny colours
+  and animated frames in the Gen 2 storage detail rail.
+
+## [0.6.2] - 2026-09-05
+
+- Gen 2: when the party and current box are full, ordinary wild-ball attempts
+  automatically select the next box with space, wrapping from Box 14 to Box 1.
+  The selected box remains active for subsequent catches and PC visits.
+- Keep native capture data, held items, nickname prompts, Pokédex updates,
+  storage healing and specialty-ball effects. Full storage still refuses
+  without using a ball or a turn; trainer/contest/tutorial flows stay native.
+
+## [0.6.1] - 2026-09-05
+
+- Conservative re-audit of all 831 Gen 2 portraits restores uncertain white
+  details and the complete verified native Silver/Crystal Goldeen fin.
+  Exact-source guards and native RGB/outline remain intact; Gold is unchanged.
+- PC controllers, group operations, Mail safeguards and navigation unchanged.
+
+## [0.6.0] - 2026-09-05
+
+- Corrected reviewed native Gen 2 portrait background gaps using exact
+  source-image guarded masks; white artwork and modded sprites remain intact.
+
+- Added actual-party end wrapping and optional Box Exclusive local navigation
+  (Off by default), with deliberate SELECT box switching.
+- Added START Multiple Selections across boxes, ordered group placement,
+  cross-party/box swaps and a six-selection Swap Whole Party action.
+- Group changes validate capacity, usable-party, Egg and native Mail safety
+  before commit; preparation failures roll back the complete save graph.
+- Added pure transaction, standalone/suite navigation and native Gen 2
+  Mail, Egg, capacity, cancellation and save-retry regression coverage.
+
+## [0.5.0] - 2026-09-05
+
+### Added
+
+- Gold, Silver, and Crystal now open directly into the same combined party
+  and box workspace as Gen 1, replacing the operation chooser. Pick up, drop,
+  swap, reorder, and carry between all fourteen boxes with the same controls.
+- Gen 2 START actions include the live Summary, held ITEM, MAIL and MAILBOX
+  screens. Native Read, Take, Compose, and Attach workflows retain letter
+  text, author, ID, species, stationery, and mailbox limits.
+- Party reordering carries slot-indexed Mail with its owner. Mail carriers
+  cannot enter a box or be released until their Mail is removed; other party
+  members can still move. Ordinary held items remain attached in storage.
+- Transfers preserve native Gen 2 healing and protect the last usable party
+  member, Eggs, full parties and full boxes. Release defaults to NO. Closing
+  saves through the native writer and remains open if saving fails.
+
+### Validation
+
+- 107 isolated native-runtime checks per game on Gold, Silver, and Crystal,
+  plus 109 per game with the suite, including its OFF fallback. Existing
+  Gen 1 regression: 143/143.
+- Reviewed compact, desktop, portrait, Summary, Item/Mail and box-picker
+  captures on runtime 0.2.56 using isolated imports and fixture saves.
+
+## [0.4.4] - 2026-09-04
+
+### Fixed
+
+- The Gold, Silver, and Crystal storage mode chooser now receives the Modern
+  PC presentation as soon as Bill's PC opens. The mod no longer appears
+  inactive until WITHDRAW, DEPOSIT, or MOVE is selected.
+- Gen 2 mail notices, box selection, and change-box save confirmation continue
+  to use their native controllers and presentation.
+
 ## [0.4.3] - 2026-09-03
 
 ### Compatibility
